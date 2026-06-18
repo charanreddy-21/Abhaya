@@ -1,0 +1,33 @@
+name: Claude AI PR Reviewer
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code Review
+        uses: fluxninja/openai-pr-reviewer@latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+        with:
+          debug: false
+          review_simple_changes: false
+          review_comment_lgtm: false
+          # We explicitly tell the action to use Anthropic's model
+          model: claude-3-haiku-20240307 
+          system_message: |
+            You are reviewing code for the Abhaya Monorepo. 
+            Strictly enforce these rules:
+            - Frontend is Next.js 14+ / TS / Tailwind.
+            - Backend is FastAPI / Pydantic v2.
+            - Frontend MUST NOT query the database directly.
+            - Hardware APIs must be in custom React hooks.
