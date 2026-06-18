@@ -7,9 +7,9 @@
     "apps/web"
   ],
   "scripts": {
-    "dev:web": "npm --prefix apps/web run dev",
-    "build:web": "npm --prefix apps/web run build",
-    "start:web": "npm --prefix apps/web run start",
+    "dev:web": "node scripts/run-web.mjs dev",
+    "build:web": "node scripts/run-web.mjs build",
+    "start:web": "node scripts/run-web.mjs start",
     "dev:server": "python -m uvicorn apps.server.main:app --reload --host 0.0.0.0 --port 8000"
   }
 }
