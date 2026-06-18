@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="Saheli Core API", version="1.0.0")
+app = FastAPI(title="Abhaya Core API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,6 +21,6 @@ class SystemStatus(BaseModel):
 async def health_check():
     return SystemStatus(
         status=200,
-        service="Saheli FastAPI Backend Operational",
+        service="Abhaya FastAPI Backend Operational",
         spatial_engine=True
     )

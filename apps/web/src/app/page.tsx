@@ -8,7 +8,7 @@ interface SystemStatus {
   spatial_engine: boolean;
 }
 
-export default function SaheliDashboard() {
+export default function AbhayaDashboard() {
   const [backendState, setBackendState] = useState<SystemStatus | null>(null);
 
   useEffect(() => {
@@ -20,7 +20,7 @@ export default function SaheliDashboard() {
 
   return (
     <div style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif' }}>
-      <h1 style={{ color: '#e11d48' }}>Saheli Command Center</h1>
+      <h1 style={{ color: '#e11d48' }}>Abhaya Command Center</h1>
       <div style={{ marginTop: '2rem', padding: '1rem', border: '1px solid #ccc' }}>
         <h2>System Telemetry</h2>
         {backendState ? (
