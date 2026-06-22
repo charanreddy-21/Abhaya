@@ -46,7 +46,15 @@ class AdminAuditEventOut(BaseModel):
     resource_type: str
     resource_id: str | None
     actor_label: str
+    ip_address: str | None
     created_at: datetime
+
+
+class AuditLogPage(BaseModel):
+    events: list[AdminAuditEventOut]
+    total: int
+    offset: int
+    limit: int
 
 
 class AdminIncidentDetailOut(BaseModel):

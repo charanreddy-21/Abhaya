@@ -11,6 +11,7 @@ from apps.server.app.modules.admin.schemas import (
     AdminIncidentDetailOut,
     AdminIncidentOut,
     AdminWitnessOut,
+    AuditLogPage,
     SystemMetricsOut,
 )
 from apps.server.app.modules.sos.repository import SOSRepository
@@ -87,6 +88,7 @@ def _audit_to_out(event: AuditEvent) -> AdminAuditEventOut:
         resource_type=event.resource_type,
         resource_id=event.resource_id,
         actor_label=actor_label,
+        ip_address=event.ip_address,
         created_at=event.created_at,
     )
 
@@ -181,6 +183,26 @@ class AdminService:
             total_safe_places=places_result.scalar() or 0,
             db_status="ok",
         )
+
+    async def list_audit_log(
+        self,
+        action_prefix: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> AuditLogPage:
+        query = select(AuditEvent).order_by(AuditEvent.created_at.desc())
+        count_query = select(func.count()).select_from(AuditEvent)
+        if action_prefix:
+            query = query.where(AuditEvent.action.startswith(action_prefix))
+            count_query = count_query.where(AuditEvent.action.startswith(action_prefix))
+
+        total_result = await self._db.execute(count_query)
+        total = total_result.scalar() or 0
+
+        events_result = await self._db.execute(query.limit(limit).offset(offset))
+        events = [_audit_to_out(e) for e in events_result.scalars().all()]
+
+        return AuditLogPage(events=events, total=total, offset=offset, limit=limit)
 
     async def _log_admin_access(self, admin_id: str, admin_email: str, incident_id: str) -> None:
         event = AuditEvent(

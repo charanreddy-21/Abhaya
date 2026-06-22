@@ -6,6 +6,7 @@ from apps.server.app.core.security import require_admin
 from apps.server.app.modules.admin.schemas import (
     AdminIncidentDetailOut,
     AdminIncidentOut,
+    AuditLogPage,
     SystemMetricsOut,
 )
 from apps.server.app.modules.admin.service import AdminService
@@ -45,3 +46,14 @@ async def resolve_incident(
     db: AsyncSession = Depends(get_db),
 ):
     return await AdminService(db).resolve_incident(incident_id, admin.id)
+
+
+@router.get("/audit", response_model=AuditLogPage)
+async def list_audit_log(
+    action: str | None = Query(None, description="Filter by action prefix, e.g. 'auth', 'sos', 'admin'"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await AdminService(db).list_audit_log(action_prefix=action, limit=limit, offset=offset)

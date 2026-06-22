@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Activity, AlertTriangle, CheckCircle2, ChevronRight,
-  Clock3, Eye, FileVideo, Loader2, Shield, Siren, TrendingUp, Users,
+  Clock3, Eye, FileVideo, List, Loader2, Shield, Siren, TrendingUp, Users,
 } from 'lucide-react';
 import Link from 'next/link';
 import { adminApi } from '@/lib/api';
@@ -183,6 +183,11 @@ export function AdminCommandCenter() {
               value={activeCount > 0 ? String(activeCount) : 'None'}
             />
           </Panel>
+
+          <Link href="/admin/audit" className="btn btn-sm btn-ghost" style={{ justifyContent: 'flex-start', gap: 8 }}>
+            <List size={15} />
+            View audit log
+          </Link>
 
           <div className="admin-access-notice">
             <Eye size={14} />

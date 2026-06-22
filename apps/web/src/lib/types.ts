@@ -144,7 +144,15 @@ export interface AdminAuditEvent {
   resource_type: string;
   resource_id: string | null;
   actor_label: string;
+  ip_address: string | null;
   created_at: string;
+}
+
+export interface AuditLogPage {
+  events: AdminAuditEvent[];
+  total: number;
+  offset: number;
+  limit: number;
 }
 
 export interface AdminIncidentDetail {

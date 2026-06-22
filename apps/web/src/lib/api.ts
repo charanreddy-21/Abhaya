@@ -4,6 +4,7 @@ import { http } from './api-client';
 import type {
   AdminIncident,
   AdminIncidentDetail,
+  AuditLogPage,
   AuthResponse,
   CreateSafePlacePayload,
   CreateSOSPayload,
@@ -121,6 +122,11 @@ export const adminApi = {
 
   resolveIncident: (id: string) =>
     http.post<AdminIncident>(`/api/admin/incidents/${id}/resolve`),
+
+  listAuditLog: (params?: { action?: string; limit?: number; offset?: number }) =>
+    http.get<AuditLogPage>('/api/admin/audit', {
+      params: params as Record<string, string | number | boolean | null | undefined>,
+    }),
 };
 
 // ── Notifications ──────────────────────────────────────────────────────────────
