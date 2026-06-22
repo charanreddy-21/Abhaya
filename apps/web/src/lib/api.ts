@@ -114,8 +114,8 @@ export const adminApi = {
   getMetrics: () =>
     http.get<SystemMetrics>('/api/admin/metrics'),
 
-  listIncidents: (status?: 'active' | 'resolved') =>
-    http.get<AdminIncident[]>('/api/admin/incidents', { params: { status } }),
+  listIncidents: (status?: 'active' | 'resolved', limit = 50, offset = 0) =>
+    http.get<AdminIncident[]>('/api/admin/incidents', { params: { status, limit, offset } }),
 
   getIncident: (id: string) =>
     http.get<AdminIncidentDetail>(`/api/admin/incidents/${id}`),

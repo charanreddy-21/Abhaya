@@ -257,7 +257,7 @@ h1, h2, h3 { margin: 0; }
   text-transform: uppercase;
 }
 
-.section-title { font-size: 18px; font-weight: 700; line-height: 26px; }
+.section-title { font-size: 18px; font-weight: 700; line-height: 26px; display: flex; align-items: center; }
 .incident-title { font-size: 14px; font-weight: 650; margin: 0; }
 .incident-copy { color: var(--muted); font-size: 13px; line-height: 18px; margin: 0; }
 
@@ -2408,6 +2408,109 @@ h1, h2, h3 { margin: 0; }
   .capability-grid { grid-template-columns: 1fr; }
   .evidence-grid { grid-template-columns: 1fr; }
   .admin-metrics-row { grid-template-columns: repeat(2, 1fr); }
+  /* Audit log collapses to 3-column on very small screens */
+  .audit-table-head { display: none; }
+  .audit-row-main { grid-template-columns: 1fr auto 28px; }
+  .audit-row-main > span:nth-child(3),
+  .audit-row-main > span:nth-child(5) { display: none; }
+  /* Safe places admin collapses */
+  .admin-sp-head { display: none; }
+  .admin-sp-row {
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+  }
+  .admin-sp-row > span:nth-child(2),
+  .admin-sp-row > span:nth-child(3) { display: none; }
+  /* History row meta wraps */
+  .history-row-meta { flex-wrap: wrap; gap: 6px; }
+}
+
+/* ─── Admin pagination ───────────────────────────────────────── */
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 8px 4px 0;
+}
+
+.admin-page-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+/* ─── Touch target improvements ─────────────────────────────── */
+@media (pointer: coarse) {
+  /* Ensure all interactive elements meet 44px minimum touch target */
+  .filter-tab {
+    min-height: 40px;
+    padding-inline: 14px;
+  }
+  .btn-sm {
+    min-height: 40px;
+    padding-inline: 14px;
+  }
+  .bottom-nav-item {
+    min-height: 52px;
+  }
+  .side-nav-item {
+    min-height: 44px;
+  }
+  .admin-sp-open-toggle {
+    min-height: 40px;
+    padding-inline: 14px;
+  }
+  .admin-sp-delete-btn {
+    width: 40px;
+    height: 40px;
+  }
+  .audit-row-main {
+    min-height: 52px;
+  }
+  /* Evidence action buttons */
+  .evidence-action-btn {
+    min-height: 40px;
+    min-width: 40px;
+  }
+}
+
+/* ─── Reduced motion ─────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .spin { animation: none !important; }
+  .sos-pulse-ring { animation: none !important; }
+}
+
+/* ─── Print ──────────────────────────────────────────────────── */
+@media print {
+  .side-nav, .bottom-nav, .offline-banner { display: none !important; }
+  .shell-main { margin-left: 0 !important; padding: 0 !important; }
+  .audit-table { border: 1px solid #ccc; }
+  .audit-row-main { break-inside: avoid; }
+  a::after { content: " (" attr(href) ")"; font-size: 10px; color: #666; }
 }
 
 /* ─── Auth page ──────────────────────────────────────────────── */

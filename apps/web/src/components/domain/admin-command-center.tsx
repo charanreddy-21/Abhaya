@@ -21,18 +21,27 @@ import type { AdminIncident, IncidentStatus } from '@/lib/types';
 
 type StatusFilter = IncidentStatus | 'all';
 
+const PAGE_SIZE = 20;
+
 export function AdminCommandCenter() {
   const router  = useRouter();
   const { isAdmin, isAuthenticated } = useAuth();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [page, setPage] = useState(0);
 
   const {
     data: metrics, isLoading: metricsLoading,
   } = useQuery(() => adminApi.getMetrics(), [], { intervalMs: 30_000 });
 
+  const queryStatus = statusFilter === 'all' ? undefined : statusFilter as 'active' | 'resolved';
+
   const {
     data: incidents, isLoading: incidentsLoading, error, refresh,
-  } = useQuery(() => adminApi.listIncidents(), [], { intervalMs: 15_000 });
+  } = useQuery(
+    () => adminApi.listIncidents(queryStatus, PAGE_SIZE, page * PAGE_SIZE),
+    [queryStatus, page],
+    { intervalMs: 15_000 },
+  );
 
   if (!isAuthenticated) {
     return (
@@ -58,11 +67,9 @@ export function AdminCommandCenter() {
     );
   }
 
-  const filtered = (incidents ?? []).filter(
-    (i) => statusFilter === 'all' || i.status === statusFilter,
-  );
-
+  const filtered = incidents ?? [];
   const activeCount  = metrics?.active_incidents ?? 0;
+  const hasMore = filtered.length === PAGE_SIZE;
 
   return (
     <div className="view-container admin-view">
@@ -112,17 +119,25 @@ export function AdminCommandCenter() {
           <AdminMapPreview incidents={incidents ?? []} />
 
           <div className="admin-table-header">
-            <h2 className="section-title">Incidents</h2>
+            <h2 className="section-title">
+              Incidents
+              {metrics && (
+                <span className="section-count">
+                  {statusFilter === 'active' ? metrics.active_incidents
+                    : statusFilter === 'resolved' ? metrics.total_incidents - metrics.active_incidents
+                    : metrics.total_incidents}
+                </span>
+              )}
+            </h2>
             <div className="admin-filters">
               {(['all', 'active', 'resolved'] as StatusFilter[]).map((f) => (
                 <button
                   key={f}
                   className={`filter-tab ${statusFilter === f ? 'is-active' : ''}`}
-                  onClick={() => setStatusFilter(f)}
+                  onClick={() => { setStatusFilter(f); setPage(0); }}
                   type="button"
                 >
                   {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
-                  {f === 'all' && incidents && ` (${incidents.length})`}
                 </button>
               ))}
             </div>
@@ -143,22 +158,44 @@ export function AdminCommandCenter() {
               <h3>No incidents</h3>
             </div>
           ) : (
-            <div className="admin-table">
-              <div className="admin-table-head">
-                <span>Status</span>
-                <span>ID</span>
-                <span>User</span>
-                <span>Elapsed</span>
-                <span>Alerts / Acks</span>
-                <span>Evidence</span>
-                <span />
+            <>
+              <div className="admin-table">
+                <div className="admin-table-head">
+                  <span>Status</span>
+                  <span>ID</span>
+                  <span>User</span>
+                  <span>Elapsed</span>
+                  <span>Alerts / Acks</span>
+                  <span>Evidence</span>
+                  <span />
+                </div>
+                <AnimatePresence>
+                  {filtered.map((incident, i) => (
+                    <AdminIncidentRow key={incident.id} incident={incident} index={i} />
+                  ))}
+                </AnimatePresence>
               </div>
-              <AnimatePresence>
-                {filtered.map((incident, i) => (
-                  <AdminIncidentRow key={incident.id} incident={incident} index={i} />
-                ))}
-              </AnimatePresence>
-            </div>
+
+              <div className="admin-pagination">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                >
+                  Previous
+                </Button>
+                <span className="admin-page-label">Page {page + 1}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={!hasMore}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            </>
           )}
         </div>
 
