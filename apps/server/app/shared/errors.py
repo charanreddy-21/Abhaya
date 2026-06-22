@@ -68,6 +68,10 @@ def witness_not_opted_in() -> AbhayaError:
 def safe_place_not_found() -> AbhayaError:
     return _err("SAFE_PLACE_NOT_FOUND", "That safe place was not found.", 404)
 
+# Rate limiting (generic)
+def rate_limit_exceeded(detail: str = "Too many requests. Please wait before trying again.") -> AbhayaError:
+    return _err("RATE_LIMIT_EXCEEDED", detail, 429)
+
 # Generic
 def not_found(resource: str = "Resource") -> AbhayaError:
     return _err("NOT_FOUND", f"{resource} was not found.", 404)
