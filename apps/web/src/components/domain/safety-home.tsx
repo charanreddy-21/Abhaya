@@ -211,8 +211,7 @@ export function SafetyHome() {
   const healthBadgeTone = healthState === 'online' ? 'ok' : healthState === 'checking' ? 'info' : 'warn';
 
   return (
-    <main className="app-shell">
-      <section className="home-shell" aria-labelledby="page-title">
+    <section className="home-shell" aria-labelledby="page-title">
         <header className="topbar">
           <a className="brand-link" href="#top" aria-label="Abhaya home">
             <span className="brand-mark" aria-hidden="true">
@@ -279,12 +278,11 @@ export function SafetyHome() {
             </Panel>
           </aside>
         </div>
-      </section>
 
       <CapabilitySection />
       <PrototypeFlow />
       <UILibraryPreview />
-    </main>
+    </section>
   );
 }
 
