@@ -10,10 +10,13 @@ from apps.server.app.modules.admin.schemas import (
     AdminEvidenceOut,
     AdminIncidentDetailOut,
     AdminIncidentOut,
+    AdminUserListPage,
+    AdminUserOut,
     AdminWitnessOut,
     AuditLogPage,
     SystemMetricsOut,
 )
+from apps.server.app.modules.auth.repository import UserRepository
 from apps.server.app.modules.sos.repository import SOSRepository
 from apps.server.app.shared.errors import sos_not_found
 from apps.server.app.shared.models import (
@@ -203,6 +206,42 @@ class AdminService:
         events = [_audit_to_out(e) for e in events_result.scalars().all()]
 
         return AuditLogPage(events=events, total=total, offset=offset, limit=limit)
+
+    async def list_users(
+        self,
+        role: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> AdminUserListPage:
+        query = select(User).options(selectinload(User.incidents))
+        count_query = select(func.count()).select_from(User)
+        if role:
+            query = query.where(User.role == role)
+            count_query = count_query.where(User.role == role)
+
+        query = query.order_by(User.created_at.desc()).limit(limit).offset(offset)
+
+        total_result = await self._db.execute(count_query)
+        total = total_result.scalar() or 0
+
+        users_result = await self._db.execute(query)
+        users = users_result.scalars().all()
+
+        user_outs = [
+            AdminUserOut(
+                id=u.id,
+                display_name=u.display_name,
+                role=u.role,
+                witness_opt_in=u.witness_opt_in,
+                anonymous_by_default=u.anonymous_by_default,
+                has_push=bool(u.push_endpoint),
+                incident_count=len(u.incidents) if u.incidents else 0,
+                created_at=u.created_at,
+            )
+            for u in users
+        ]
+
+        return AdminUserListPage(users=user_outs, total=total, offset=offset, limit=limit)
 
     async def _log_admin_access(self, admin_id: str, admin_email: str, incident_id: str) -> None:
         event = AuditEvent(

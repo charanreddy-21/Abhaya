@@ -162,6 +162,24 @@ export interface AdminIncidentDetail {
   timeline: AdminAuditEvent[];
 }
 
+export interface AdminUser {
+  id: string;
+  display_name: string;
+  role: 'user' | 'admin';
+  witness_opt_in: boolean;
+  anonymous_by_default: boolean;
+  has_push: boolean;
+  incident_count: number;
+  created_at: string;
+}
+
+export interface AdminUserListPage {
+  users: AdminUser[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
 export interface SystemMetrics {
   active_incidents: number;
   total_incidents: number;

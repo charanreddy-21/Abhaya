@@ -4,6 +4,7 @@ import { http } from './api-client';
 import type {
   AdminIncident,
   AdminIncidentDetail,
+  AdminUserListPage,
   AuditLogPage,
   AuthResponse,
   CreateSafePlacePayload,
@@ -141,6 +142,11 @@ export const adminApi = {
 
   deleteSafePlace: (id: string) =>
     http.delete(`/api/admin/safe-places/${id}`),
+
+  listUsers: (params?: { role?: 'user' | 'admin'; limit?: number; offset?: number }) =>
+    http.get<AdminUserListPage>('/api/admin/users', {
+      params: params as Record<string, string | number | boolean | null | undefined>,
+    }),
 };
 
 // ── Notifications ──────────────────────────────────────────────────────────────

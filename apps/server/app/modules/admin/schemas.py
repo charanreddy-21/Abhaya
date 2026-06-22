@@ -64,6 +64,24 @@ class AdminIncidentDetailOut(BaseModel):
     timeline: list[AdminAuditEventOut]
 
 
+class AdminUserOut(BaseModel):
+    id: str
+    display_name: str
+    role: str
+    witness_opt_in: bool
+    anonymous_by_default: bool
+    has_push: bool
+    incident_count: int
+    created_at: datetime
+
+
+class AdminUserListPage(BaseModel):
+    users: list[AdminUserOut]
+    total: int
+    offset: int
+    limit: int
+
+
 class SystemMetricsOut(BaseModel):
     active_incidents: int
     total_incidents: int

@@ -229,6 +229,10 @@ export function AdminCommandCenter() {
             <MapPin size={15} />
             Manage safe places
           </Link>
+          <Link href="/admin/users" className="btn btn-sm btn-ghost" style={{ justifyContent: 'flex-start', gap: 8 }}>
+            <Users size={15} />
+            View user accounts
+          </Link>
 
           <div className="admin-access-notice">
             <Eye size={14} />

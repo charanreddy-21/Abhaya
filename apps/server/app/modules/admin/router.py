@@ -6,6 +6,7 @@ from apps.server.app.core.security import require_admin
 from apps.server.app.modules.admin.schemas import (
     AdminIncidentDetailOut,
     AdminIncidentOut,
+    AdminUserListPage,
     AuditLogPage,
     SystemMetricsOut,
 )
@@ -90,3 +91,16 @@ async def admin_delete_safe_place(
     db: AsyncSession = Depends(get_db),
 ):
     await SafePlaceService(db).delete_place(place_id, admin.id)
+
+
+# ── User admin management ──────────────────────────────────────────────────────
+
+@router.get("/users", response_model=AdminUserListPage)
+async def list_users(
+    role: str | None = Query(None, pattern="^(user|admin)$"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await AdminService(db).list_users(role=role, limit=limit, offset=offset)
