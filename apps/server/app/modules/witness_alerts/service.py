@@ -1,3 +1,5 @@
+import json
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -5,7 +7,7 @@ from apps.server.app.core.config import settings
 from apps.server.app.modules.witness_alerts.repository import WitnessAlertRepository
 from apps.server.app.modules.witness_alerts.schemas import WitnessAlertOut
 from apps.server.app.shared.errors import forbidden, witness_alert_not_found, witness_not_opted_in
-from apps.server.app.shared.models import Incident, User, WitnessAlert
+from apps.server.app.shared.models import AuditEvent, Incident, User, WitnessAlert
 from apps.server.app.shared.utils import approx_lat_lng, haversine_meters
 
 
@@ -85,4 +87,16 @@ class WitnessAlertService:
         if alert.witness_id != witness_id:
             raise forbidden("this alert")
         updated = await self._repo.update_status(alert, "revealed")
+
+        # Audit identity disclosure — privacy-sensitive action
+        audit = AuditEvent(
+            actor_id=witness_id,
+            action="witness.identity.revealed",
+            resource_type="witness_alert",
+            resource_id=alert_id,
+            metadata_json=json.dumps({"incident_id": alert.incident_id}),
+        )
+        self._db.add(audit)
+        await self._db.commit()
+
         return _to_out(updated, witness_id)

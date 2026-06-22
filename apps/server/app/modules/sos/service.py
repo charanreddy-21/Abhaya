@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +13,7 @@ from apps.server.app.shared.errors import (
     sos_not_found,
     sos_rate_limit,
 )
-from apps.server.app.shared.models import Incident
+from apps.server.app.shared.models import AuditEvent, Incident
 from apps.server.app.shared.utils import approx_lat_lng
 
 
@@ -53,6 +54,16 @@ class SOSService:
         except Exception:
             pass  # Evidence/alerts are supplementary — never block SOS
 
+        audit = AuditEvent(
+            actor_id=user_id,
+            action="sos.create",
+            resource_type="incident",
+            resource_id=incident.id,
+            metadata_json=json.dumps({"accuracy_meters": req.accuracy_meters}),
+        )
+        self._db.add(audit)
+        await self._db.commit()
+
         return _to_out(incident)
 
     async def get(self, incident_id: str, user_id: str) -> IncidentOut:
@@ -72,6 +83,17 @@ class SOSService:
         if incident.status == "resolved":
             raise sos_already_resolved()
         incident = await self._repo.resolve(incident)
+
+        audit = AuditEvent(
+            actor_id=user_id,
+            action="sos.resolve",
+            resource_type="incident",
+            resource_id=incident_id,
+            metadata_json=json.dumps({"resolved_by": "user"}),
+        )
+        self._db.add(audit)
+        await self._db.commit()
+
         return _to_out(incident)
 
     async def list_active(self, user_id: str) -> list[IncidentOut]:
