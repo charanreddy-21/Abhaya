@@ -8,13 +8,15 @@ import {
   Siren, X,
 } from 'lucide-react';
 import { safePlacesApi } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/components/ui/toast';
-import { useQuery, useGeolocation } from '@/lib/hooks';
+import { useQuery, useGeolocation, useMutation } from '@/lib/hooks';
+import { AbhayaApiError } from '@/lib/api-client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Panel } from '@/components/ui/panel';
 import { PageHeader } from '@/components/ui/page-header';
-import type { SafePlace, SafePlaceKind, VerificationLevel } from '@/lib/types';
+import type { CreateSafePlacePayload, SafePlace, SafePlaceKind, VerificationLevel } from '@/lib/types';
 
 type KindFilter = 'all' | SafePlaceKind;
 
@@ -35,8 +37,10 @@ const ALL_KINDS: KindFilter[] = ['all', 'police', 'hospital', 'pharmacy', 'petro
 export function SafePlacesView() {
   const { toast } = useToast();
   const geo = useGeolocation();
-  const [kindFilter, setKindFilter] = useState<KindFilter>('all');
-  const [selected, setSelected]     = useState<SafePlace | null>(null);
+  const { isAuthenticated } = useAuth();
+  const [kindFilter, setKindFilter]     = useState<KindFilter>('all');
+  const [selected, setSelected]         = useState<SafePlace | null>(null);
+  const [showSubmit, setShowSubmit]     = useState(false);
 
   const { data: places, isLoading, error, refresh } = useQuery(
     () => safePlacesApi.list({
@@ -138,6 +142,30 @@ export function SafePlacesView() {
           users and may be outdated. Always call ahead in urgent situations.
         </p>
       </div>
+
+      {isAuthenticated && (
+        <div className="safe-places-submit-row">
+          <p style={{ fontSize: 13, color: 'var(--muted)' }}>Know a place that should be here?</p>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<MapPin size={14} />}
+            onClick={() => setShowSubmit(true)}
+          >
+            Submit a location
+          </Button>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {showSubmit && (
+          <SubmitPlaceModal
+            geo={geo.position}
+            onClose={() => setShowSubmit(false)}
+            onSuccess={() => { setShowSubmit(false); refresh(); toast('Location submitted for review.', 'ok'); }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -246,6 +274,132 @@ function SafePlacesSkeleton() {
         </div>
       ))}
     </div>
+  );
+}
+
+function SubmitPlaceModal({ geo, onClose, onSuccess }: {
+  geo: GeolocationCoordinates | null;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const { toast } = useToast();
+  const [name, setName]       = useState('');
+  const [kind, setKind]       = useState<SafePlaceKind>('police');
+  const [address, setAddress] = useState('');
+  const [isOpen, setIsOpen]   = useState(true);
+
+  const { mutate: submitPlace, isLoading } = useMutation(
+    (payload: CreateSafePlacePayload) => safePlacesApi.create(payload),
+  );
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!geo) { toast('Enable location first so we can record the coordinates.', 'warn'); return; }
+    if (!name.trim()) return;
+    try {
+      await submitPlace({
+        name: name.trim(),
+        kind,
+        lat: geo.latitude,
+        lng: geo.longitude,
+        address: address.trim() || undefined,
+        is_open: isOpen,
+      });
+      onSuccess();
+    } catch (err) {
+      toast(err instanceof AbhayaApiError ? err.message : 'Could not submit location.', 'warn');
+    }
+  }
+
+  return (
+    <motion.div
+      className="modal-overlay"
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      onClick={onClose}
+    >
+      <motion.form
+        className="modal-card submit-place-form"
+        initial={{ scale: 0.92, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.92 }}
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={handleSubmit}
+      >
+        <div className="modal-icon tone-info"><MapPin size={22} /></div>
+        <h3 className="modal-title">Submit a location</h3>
+        <p className="modal-body">
+          Add a community-verified safety location. Your coordinates will be recorded.
+          Submitted places are visible immediately with Community status.
+        </p>
+
+        {!geo && (
+          <div className="evidence-notice warn" style={{ width: '100%', margin: 0 }}>
+            <AlertTriangle size={13} />
+            Enable location first — coordinates are required.
+          </div>
+        )}
+
+        <div className="submit-place-fields">
+          <div className="auth-field">
+            <label className="auth-label" htmlFor="place-name">Place name</label>
+            <input
+              id="place-name"
+              className="auth-input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Apollo Pharmacy, Koramangala"
+              required
+              maxLength={128}
+            />
+          </div>
+
+          <div className="auth-field">
+            <label className="auth-label" htmlFor="place-kind">Category</label>
+            <select
+              id="place-kind"
+              className="auth-input"
+              value={kind}
+              onChange={(e) => setKind(e.target.value as SafePlaceKind)}
+            >
+              {(['police', 'hospital', 'pharmacy', 'petrol', 'shelter'] as SafePlaceKind[]).map((k) => (
+                <option key={k} value={k}>{KIND_META[k].label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="auth-field">
+            <label className="auth-label" htmlFor="place-address">Address (optional)</label>
+            <input
+              id="place-address"
+              className="auth-input"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Street address or landmark"
+              maxLength={256}
+            />
+          </div>
+
+          <label className="submit-place-open-toggle">
+            <input
+              type="checkbox"
+              checked={isOpen}
+              onChange={(e) => setIsOpen(e.target.checked)}
+            />
+            Currently open
+          </label>
+        </div>
+
+        <div className="modal-actions">
+          <Button variant="ghost" type="button" onClick={onClose} icon={<X size={14} />}>Cancel</Button>
+          <Button
+            variant="secondary"
+            type="submit"
+            disabled={isLoading || !geo || !name.trim()}
+            icon={isLoading ? <Loader2 size={14} className="spin" /> : <MapPin size={14} />}
+          >
+            Submit location
+          </Button>
+        </div>
+      </motion.form>
+    </motion.div>
   );
 }
 

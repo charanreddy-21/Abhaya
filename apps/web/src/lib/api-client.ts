@@ -53,10 +53,11 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
   formData?: FormData;
   params?: Record<string, string | number | boolean | null | undefined>;
+  retries?: number;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { token, body, formData, params, ...init } = options;
+  const { token, body, formData, params, retries = 1, ...init } = options;
 
   // Build URL with query params
   const url = new URL(`${API_BASE}${path}`);
@@ -84,6 +85,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   try {
     response = await fetch(url.toString(), requestInit);
   } catch {
+    // Retry on network failure for read-only requests
+    if (retries > 0 && init.method === 'GET') {
+      await new Promise((r) => setTimeout(r, 1200));
+      return request<T>(path, { ...options, retries: retries - 1 });
+    }
     throw new NetworkError();
   }
 

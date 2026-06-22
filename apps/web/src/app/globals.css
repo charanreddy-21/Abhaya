@@ -3112,3 +3112,57 @@ h1, h2, h3 { margin: 0; }
   border-color: var(--forest);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--forest) 12%, transparent);
 }
+
+/* ─── Safe Places submit form ────────────────────────────────── */
+.safe-places-submit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.submit-place-form {
+  text-align: left;
+  align-items: flex-start;
+  max-width: 460px;
+}
+
+.submit-place-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.submit-place-open-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--slate);
+  cursor: pointer;
+}
+
+.submit-place-open-toggle input { cursor: pointer; accent-color: var(--forest); width: 15px; height: 15px; }
+
+/* ─── Evidence notice variants ───────────────────────────────── */
+.evidence-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  border: 1px solid var(--line);
+}
+
+.evidence-notice.warn {
+  background: var(--amber-soft);
+  color: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 25%, var(--line));
+}
+
+.evidence-notice.warn p { color: var(--slate); }
