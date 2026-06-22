@@ -45,6 +45,22 @@ class SafePlaceRepository:
         await self._db.refresh(place)
         return place
 
+    async def set_verification_level(self, place: SafePlace, level: str) -> SafePlace:
+        place.verification_level = level
+        await self._db.commit()
+        await self._db.refresh(place)
+        return place
+
+    async def set_open(self, place: SafePlace, is_open: bool) -> SafePlace:
+        place.is_open = is_open
+        await self._db.commit()
+        await self._db.refresh(place)
+        return place
+
+    async def delete(self, place: SafePlace) -> None:
+        await self._db.delete(place)
+        await self._db.commit()
+
     async def count(self) -> int:
         result = await self._db.execute(select(SafePlace))
         return len(result.scalars().all())

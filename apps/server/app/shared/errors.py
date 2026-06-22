@@ -73,6 +73,9 @@ def rate_limit_exceeded(detail: str = "Too many requests. Please wait before try
     return _err("RATE_LIMIT_EXCEEDED", detail, 429)
 
 # Generic
+def bad_request(code: str, message: str) -> AbhayaError:
+    return _err(code, message, 400)
+
 def not_found(resource: str = "Resource") -> AbhayaError:
     return _err("NOT_FOUND", f"{resource} was not found.", 404)
 

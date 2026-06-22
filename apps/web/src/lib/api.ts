@@ -127,6 +127,20 @@ export const adminApi = {
     http.get<AuditLogPage>('/api/admin/audit', {
       params: params as Record<string, string | number | boolean | null | undefined>,
     }),
+
+  listSafePlaces: (params?: { kind?: string }) =>
+    http.get<SafePlace[]>('/api/safe-places', {
+      params: params as Record<string, string | number | boolean | null | undefined>,
+    }),
+
+  verifySafePlace: (id: string, level: 'unverified' | 'community' | 'admin') =>
+    http.patch<SafePlace>(`/api/admin/safe-places/${id}/verify`, { level }),
+
+  setSafePlaceOpen: (id: string, is_open: boolean) =>
+    http.patch<SafePlace>(`/api/admin/safe-places/${id}/open`, { is_open }),
+
+  deleteSafePlace: (id: string) =>
+    http.delete(`/api/admin/safe-places/${id}`),
 };
 
 // ── Notifications ──────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.server.app.core.database import get_db
@@ -10,6 +10,8 @@ from apps.server.app.modules.admin.schemas import (
     SystemMetricsOut,
 )
 from apps.server.app.modules.admin.service import AdminService
+from apps.server.app.modules.safe_places.schemas import SafePlaceOut
+from apps.server.app.modules.safe_places.service import SafePlaceService
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -57,3 +59,34 @@ async def list_audit_log(
     db: AsyncSession = Depends(get_db),
 ):
     return await AdminService(db).list_audit_log(action_prefix=action, limit=limit, offset=offset)
+
+
+# ── Safe Place admin management ────────────────────────────────────────────────
+
+@router.patch("/safe-places/{place_id}/verify", response_model=SafePlaceOut)
+async def admin_verify_safe_place(
+    place_id: str,
+    level: str = Body(..., embed=True, pattern="^(unverified|community|admin)$"),
+    admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await SafePlaceService(db).verify(place_id, admin.id, level)
+
+
+@router.patch("/safe-places/{place_id}/open", response_model=SafePlaceOut)
+async def admin_set_safe_place_open(
+    place_id: str,
+    is_open: bool = Body(..., embed=True),
+    admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await SafePlaceService(db).set_open(place_id, admin.id, is_open)
+
+
+@router.delete("/safe-places/{place_id}", status_code=204)
+async def admin_delete_safe_place(
+    place_id: str,
+    admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    await SafePlaceService(db).delete_place(place_id, admin.id)

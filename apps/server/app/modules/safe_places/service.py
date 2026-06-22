@@ -93,3 +93,62 @@ class SafePlaceService:
         await self._db.commit()
 
         return _to_out(place)
+
+    async def verify(self, place_id: str, admin_id: str, level: str) -> SafePlaceOut:
+        if level not in ("unverified", "community", "admin"):
+            from apps.server.app.shared.errors import bad_request
+            raise bad_request("INVALID_VERIFICATION_LEVEL", "Level must be unverified, community, or admin.")
+        place = await self._repo.get_by_id(place_id)
+        if not place:
+            raise safe_place_not_found()
+
+        old_level = place.verification_level
+        place = await self._repo.set_verification_level(place, level)
+
+        audit = AuditEvent(
+            actor_id=admin_id,
+            action="admin.safe_place.verify",
+            resource_type="safe_place",
+            resource_id=place.id,
+            metadata_json=json.dumps({"from": old_level, "to": level}),
+        )
+        self._db.add(audit)
+        await self._db.commit()
+
+        return _to_out(place)
+
+    async def set_open(self, place_id: str, admin_id: str, is_open: bool) -> SafePlaceOut:
+        place = await self._repo.get_by_id(place_id)
+        if not place:
+            raise safe_place_not_found()
+
+        place = await self._repo.set_open(place, is_open)
+
+        audit = AuditEvent(
+            actor_id=admin_id,
+            action="admin.safe_place.set_open",
+            resource_type="safe_place",
+            resource_id=place.id,
+            metadata_json=json.dumps({"is_open": is_open}),
+        )
+        self._db.add(audit)
+        await self._db.commit()
+
+        return _to_out(place)
+
+    async def delete_place(self, place_id: str, admin_id: str) -> None:
+        place = await self._repo.get_by_id(place_id)
+        if not place:
+            raise safe_place_not_found()
+
+        audit = AuditEvent(
+            actor_id=admin_id,
+            action="admin.safe_place.delete",
+            resource_type="safe_place",
+            resource_id=place_id,
+            metadata_json=json.dumps({"name": place.name, "kind": place.kind}),
+        )
+        self._db.add(audit)
+        await self._db.commit()
+
+        await self._repo.delete(place)

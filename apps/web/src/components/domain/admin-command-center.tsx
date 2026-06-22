@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Activity, AlertTriangle, CheckCircle2, ChevronRight,
-  Clock3, Eye, FileVideo, List, Loader2, Shield, Siren, TrendingUp, Users,
+  Clock3, Eye, FileVideo, List, Loader2, MapPin, Shield, Siren, TrendingUp, Users,
 } from 'lucide-react';
 import Link from 'next/link';
 import { adminApi } from '@/lib/api';
@@ -187,6 +187,10 @@ export function AdminCommandCenter() {
           <Link href="/admin/audit" className="btn btn-sm btn-ghost" style={{ justifyContent: 'flex-start', gap: 8 }}>
             <List size={15} />
             View audit log
+          </Link>
+          <Link href="/admin/safe-places" className="btn btn-sm btn-ghost" style={{ justifyContent: 'flex-start', gap: 8 }}>
+            <MapPin size={15} />
+            Manage safe places
           </Link>
 
           <div className="admin-access-notice">
