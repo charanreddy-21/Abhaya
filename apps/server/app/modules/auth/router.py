@@ -17,9 +17,10 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=dict, status_code=201)
-async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register(req: RegisterRequest, request: Request, db: AsyncSession = Depends(get_db)):
     svc = AuthService(db)
-    user, token = await svc.register(req)
+    client_ip = request.client.host if request.client else "unknown"
+    user, token = await svc.register(req, client_ip)
     return {"user": UserOut.model_validate(user), "token": token}
 
 
