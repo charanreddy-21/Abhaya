@@ -1,240 +1,254 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  MapPin, Shield, CheckCircle2, AlertTriangle, Building2,
-  Cross, Flame, Car, Clock3, Navigation, Filter,
+  AlertTriangle, Building2, CheckCircle2, ChevronRight,
+  Flame, Loader2, MapPin, Navigation, Shield, ShoppingBag,
+  Siren, X,
 } from 'lucide-react';
+import { safePlacesApi } from '@/lib/api';
+import { useToast } from '@/components/ui/toast';
+import { useQuery, useGeolocation } from '@/lib/hooks';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Panel } from '@/components/ui/panel';
 import { PageHeader } from '@/components/ui/page-header';
+import type { SafePlace, SafePlaceKind, VerificationLevel } from '@/lib/types';
 
-type VerificationLevel = 'unverified' | 'community' | 'admin';
-type PlaceKind = 'police' | 'hospital' | 'pharmacy' | 'petrol' | 'public';
+type KindFilter = 'all' | SafePlaceKind;
 
-interface SafePlace {
-  id: string;
-  name: string;
-  kind: PlaceKind;
-  distance: string;
-  address: string;
-  verification: VerificationLevel;
-  open: boolean;
-  lastVerified?: string;
-}
+const KIND_META: Record<SafePlaceKind, { icon: React.ReactNode; label: string }> = {
+  police:   { icon: <Siren size={16} />,       label: 'Police' },
+  hospital: { icon: <Building2 size={16} />,   label: 'Hospital' },
+  pharmacy: { icon: <ShoppingBag size={16} />, label: 'Pharmacy' },
+  petrol:   { icon: <Flame size={16} />,       label: 'Petrol' },
+  shelter:  { icon: <Shield size={16} />,      label: 'Shelter' },
+};
 
-const SAFE_PLACES: SafePlace[] = [
-  { id: 'p1', name: 'Koramangala Police Station', kind: 'police', distance: '0.3 km', address: '80 Feet Rd, Koramangala', verification: 'admin', open: true, lastVerified: 'Jun 2025' },
-  { id: 'p2', name: 'Apollo Clinic', kind: 'hospital', distance: '0.6 km', address: '4th Block, Koramangala', verification: 'community', open: true, lastVerified: 'May 2025' },
-  { id: 'p3', name: 'MedPlus Pharmacy', kind: 'pharmacy', distance: '0.8 km', address: 'HSR Layout Sector 1', verification: 'community', open: true, lastVerified: 'Jun 2025' },
-  { id: 'p4', name: 'HPCL Petrol Pump', kind: 'petrol', distance: '1.1 km', address: '27th Main, BTM Layout', verification: 'unverified', open: true },
-  { id: 'p5', name: 'Forum Mall Security Desk', kind: 'public', distance: '1.4 km', address: 'Hosur Rd, Koramangala', verification: 'community', open: false, lastVerified: 'Apr 2025' },
-  { id: 'p6', name: 'SBI Bank Branch', kind: 'public', distance: '1.7 km', address: 'Indiranagar 100 Feet Rd', verification: 'unverified', open: false },
-];
+const KIND_TONE: Record<SafePlaceKind, string> = {
+  police: 'forest', hospital: 'danger', pharmacy: 'teal', petrol: 'amber', shelter: 'info',
+};
 
-type KindFilter = PlaceKind | 'all';
-
-const KIND_FILTERS: { kind: KindFilter; label: string }[] = [
-  { kind: 'all', label: 'All' },
-  { kind: 'police', label: 'Police' },
-  { kind: 'hospital', label: 'Hospital' },
-  { kind: 'pharmacy', label: 'Pharmacy' },
-  { kind: 'petrol', label: 'Petrol Pump' },
-  { kind: 'public', label: 'Public' },
-];
+const ALL_KINDS: KindFilter[] = ['all', 'police', 'hospital', 'pharmacy', 'petrol', 'shelter'];
 
 export function SafePlacesView() {
+  const { toast } = useToast();
+  const geo = useGeolocation();
   const [kindFilter, setKindFilter] = useState<KindFilter>('all');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selected, setSelected]     = useState<SafePlace | null>(null);
 
-  const filtered = SAFE_PLACES.filter(p => kindFilter === 'all' || p.kind === kindFilter);
-  const selected = SAFE_PLACES.find(p => p.id === selectedId) ?? null;
+  const { data: places, isLoading, error, refresh } = useQuery(
+    () => safePlacesApi.list({
+      lat:    geo.position?.latitude,
+      lng:    geo.position?.longitude,
+      radius: 5000,
+      kind:   kindFilter !== 'all' ? kindFilter : undefined,
+    }),
+    [kindFilter, geo.position?.latitude, geo.position?.longitude],
+  );
 
   return (
-    <div className="view-container">
+    <div className="view-container safe-places-view">
       <PageHeader
         eyebrow="Safe places"
-        title="Nearby public places"
-        subtitle="Locations that may offer help during an emergency. Verification level is shown for each."
+        title="Nearby safety locations"
+        subtitle="Verified and community-submitted locations. Always confirm before relying on these in an emergency."
         actions={
-          <Badge tone="warn" icon={<AlertTriangle size={13} />}>
-            Routes are not guaranteed safe
-          </Badge>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={geo.isLoading ? <Loader2 size={15} className="spin" /> : <Navigation size={15} />}
+            onClick={geo.request}
+            disabled={geo.isLoading}
+          >
+            {geo.position ? 'Location active' : 'Use location'}
+          </Button>
         }
       />
 
-      <SafePlaceMapZone places={filtered} selectedId={selectedId} onSelect={setSelectedId} />
+      <div className="filter-tabs">
+        {ALL_KINDS.map((k) => (
+          <button
+            key={k}
+            className={`filter-tab ${kindFilter === k ? 'is-active' : ''}`}
+            onClick={() => setKindFilter(k)}
+            type="button"
+          >
+            {k === 'all' ? 'All' : KIND_META[k as SafePlaceKind].label}
+          </button>
+        ))}
+      </div>
 
-      <div className="safe-places-body">
-        <div className="safe-places-filters">
-          <Filter size={16} />
-          {KIND_FILTERS.map(({ kind, label }) => (
-            <button
-              key={kind}
-              className={`filter-tab ${kindFilter === kind ? 'is-active' : ''}`}
-              onClick={() => setKindFilter(kind)}
-              type="button"
-            >
-              {label}
-            </button>
-          ))}
+      <div className="safe-places-layout">
+        <div className="safe-places-list-col">
+          {isLoading ? (
+            <SafePlacesSkeleton />
+          ) : error ? (
+            <div className="error-state">
+              <AlertTriangle size={32} className="error-state-icon" />
+              <h3>Could not load locations</h3>
+              <p>{error.message}</p>
+              <Button variant="secondary" onClick={refresh}>Try again</Button>
+            </div>
+          ) : (places ?? []).length === 0 ? (
+            <div className="error-state">
+              <MapPin size={32} style={{ color: 'var(--muted)' }} />
+              <h3>No locations found</h3>
+              <p>
+                {kindFilter !== 'all'
+                  ? `No ${KIND_META[kindFilter as SafePlaceKind].label} locations in the database.`
+                  : 'No locations in the database yet.'}
+              </p>
+            </div>
+          ) : (
+            <AnimatePresence>
+              {(places ?? []).map((place, i) => (
+                <SafePlaceCard
+                  key={place.id}
+                  place={place}
+                  index={i}
+                  selected={selected?.id === place.id}
+                  onSelect={() => setSelected(selected?.id === place.id ? null : place)}
+                />
+              ))}
+            </AnimatePresence>
+          )}
         </div>
 
-        <div className="safe-places-list-grid">
-          <div className="safe-places-list">
-            {filtered.map((place, i) => (
-              <SafePlaceCard
-                key={place.id}
-                place={place}
-                index={i}
-                selected={place.id === selectedId}
-                onSelect={() => setSelectedId(place.id === selectedId ? null : place.id)}
-              />
-            ))}
-          </div>
-
+        <AnimatePresence>
           {selected && (
             <motion.div
               key={selected.id}
-              className="safe-place-detail"
+              className="safe-place-detail-panel"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
             >
-              <SafePlaceDetail place={selected} />
+              <SafePlaceDetail place={selected} onClose={() => setSelected(null)} />
             </motion.div>
           )}
-        </div>
+        </AnimatePresence>
+      </div>
+
+      <div className="sos-safety-notice">
+        <AlertTriangle size={14} />
+        <p>
+          Admin-verified locations are confirmed by our team. Community places are submitted by
+          users and may be outdated. Always call ahead in urgent situations.
+        </p>
       </div>
     </div>
   );
 }
 
-function SafePlaceMapZone({ places, selectedId, onSelect }: {
-  places: SafePlace[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <div className="safe-map-zone">
-      <div className="safe-map-grid" />
-      <div className="safe-map-you">
-        <Navigation size={16} />
-      </div>
-      {places.slice(0, 4).map((place, i) => (
-        <button
-          key={place.id}
-          className={`safe-map-pin pin-${i} ${selectedId === place.id ? 'is-selected' : ''} kind-${place.kind}`}
-          onClick={() => onSelect(place.id)}
-          type="button"
-          aria-label={place.name}
-        >
-          <PlaceIcon kind={place.kind} size={13} />
-        </button>
-      ))}
-      <div className="safe-map-legend">
-        <span><span className="legend-dot dot-teal" />You</span>
-        <span><span className="legend-dot dot-green" />Admin verified</span>
-        <span><span className="legend-dot dot-amber" />Community confirmed</span>
-        <span><span className="legend-dot dot-line" />Unverified</span>
-      </div>
-    </div>
-  );
-}
+// ── Sub-components ─────────────────────────────────────────────────────────────
 
 function SafePlaceCard({ place, index, selected, onSelect }: {
-  place: SafePlace;
-  index: number;
-  selected: boolean;
-  onSelect: () => void;
+  place: SafePlace; index: number; selected: boolean; onSelect: () => void;
 }) {
+  const meta = KIND_META[place.kind];
+  const tone = KIND_TONE[place.kind];
+
   return (
     <motion.button
       className={`safe-place-card ${selected ? 'is-selected' : ''}`}
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.06 }}
+      transition={{ delay: index * 0.05 }}
       onClick={onSelect}
       type="button"
       aria-pressed={selected}
     >
-      <div className={`place-icon kind-${place.kind}`}>
-        <PlaceIcon kind={place.kind} size={18} />
-      </div>
-      <div className="place-card-info">
-        <div className="place-card-top">
-          <h3>{place.name}</h3>
-          <span className={`place-open-dot ${place.open ? 'is-open' : 'is-closed'}`} />
+      <div className={`safe-place-kind-icon tone-${tone}`}>{meta.icon}</div>
+      <div className="safe-place-card-body">
+        <div className="safe-place-card-header">
+          <span className="safe-place-name">{place.name}</span>
+          <VerificationBadge level={place.verification_level} />
         </div>
-        <p className="place-address">{place.address}</p>
-        <div className="place-card-badges">
-          <Badge tone="neutral" icon={<Navigation size={12} />}>{place.distance}</Badge>
-          <VerificationBadge level={place.verification} />
-          {!place.open && <Badge tone="warn">Closed</Badge>}
+        <div className="safe-place-card-meta">
+          {place.distance_meters != null && (
+            <span className="safe-place-distance">~{formatDistance(place.distance_meters)}</span>
+          )}
+          <span className={`safe-place-open ${place.is_open ? 'is-open' : 'is-closed'}`}>
+            {place.is_open ? 'Open' : 'May be closed'}
+          </span>
         </div>
+        {place.address && <p className="safe-place-address">{place.address}</p>}
       </div>
+      <ChevronRight size={16} className="safe-place-chevron" />
     </motion.button>
   );
 }
 
-function SafePlaceDetail({ place }: { place: SafePlace }) {
+function SafePlaceDetail({ place, onClose }: { place: SafePlace; onClose: () => void }) {
+  const meta = KIND_META[place.kind];
+  const tone = KIND_TONE[place.kind];
+
   return (
-    <Panel eyebrow="Place details" icon={<PlaceIcon kind={place.kind} size={18} />} title={place.name}>
-      <div className="place-detail-rows">
-        <div className="place-detail-row">
-          <MapPin size={15} className="detail-icon" />
-          <div>
-            <p className="detail-label">Address</p>
-            <p className="detail-value">{place.address}</p>
+    <Panel
+      eyebrow={meta.label}
+      icon={<span className={`tone-${tone}`}>{meta.icon}</span>}
+      title={place.name}
+    >
+      <button
+        className="safe-place-detail-close"
+        onClick={onClose}
+        type="button"
+        aria-label="Close detail panel"
+      >
+        <X size={16} />
+      </button>
+      <div className="safe-place-detail-body">
+        {place.address && (
+          <div className="safe-detail-row">
+            <MapPin size={14} className="safe-detail-icon" />
+            <span>{place.address}</span>
           </div>
-        </div>
-        <div className="place-detail-row">
-          <Navigation size={15} className="detail-icon" />
-          <div>
-            <p className="detail-label">Distance</p>
-            <p className="detail-value">{place.distance}</p>
+        )}
+        {place.distance_meters != null && (
+          <div className="safe-detail-row">
+            <Navigation size={14} className="safe-detail-icon" />
+            <span>~{formatDistance(place.distance_meters)} from your location</span>
           </div>
+        )}
+        <div className="safe-detail-row">
+          <CheckCircle2 size={14} className="safe-detail-icon" />
+          <span className={place.is_open ? 'color-forest' : 'color-muted'}>
+            {place.is_open ? 'Likely open' : 'May be closed — verify before going'}
+          </span>
         </div>
-        <div className="place-detail-row">
-          <Clock3 size={15} className="detail-icon" />
-          <div>
-            <p className="detail-label">Status</p>
-            <p className="detail-value">{place.open ? 'Open now' : 'Currently closed'}</p>
-          </div>
-        </div>
-        <div className="place-detail-row">
-          <Shield size={15} className="detail-icon" />
-          <div>
-            <p className="detail-label">Verification</p>
-            <VerificationBadge level={place.verification} />
-            {place.lastVerified && <p className="detail-meta">Last checked: {place.lastVerified}</p>}
-          </div>
-        </div>
+        <VerificationBadge level={place.verification_level} />
       </div>
-      <div className="place-disclaimer">
-        <AlertTriangle size={14} />
-        <p>
-          {place.verification === 'unverified'
-            ? 'This place has not been verified. Treat with caution.'
-            : 'Verified places may not be safe in all situations. Use your judgement.'}
-        </p>
-      </div>
+      <p className="panel-footnote">
+        Abhaya cannot guarantee hours or services. Always confirm directly in an emergency.
+      </p>
     </Panel>
   );
 }
 
 function VerificationBadge({ level }: { level: VerificationLevel }) {
-  if (level === 'admin') return <Badge tone="ok" icon={<CheckCircle2 size={12} />}>Admin verified</Badge>;
-  if (level === 'community') return <Badge tone="info" icon={<Shield size={12} />}>Community confirmed</Badge>;
+  if (level === 'admin')     return <Badge tone="ok" icon={<CheckCircle2 size={11} />}>Verified</Badge>;
+  if (level === 'community') return <Badge tone="info" icon={<Shield size={11} />}>Community</Badge>;
   return <Badge tone="neutral">Unverified</Badge>;
 }
 
-function PlaceIcon({ kind, size }: { kind: PlaceKind; size: number }) {
-  if (kind === 'police') return <Shield size={size} />;
-  if (kind === 'hospital') return <Cross size={size} />;
-  if (kind === 'pharmacy') return <Cross size={size} />;
-  if (kind === 'petrol') return <Flame size={size} />;
-  if (kind === 'public') return <Building2 size={size} />;
-  return <MapPin size={size} />;
+function SafePlacesSkeleton() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="safe-place-card" aria-hidden>
+          <div className="skeleton" style={{ width: 36, height: 36, borderRadius: 8, flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div className="skeleton skeleton-text" style={{ width: '55%' }} />
+            <div className="skeleton skeleton-text sm" style={{ width: '35%', marginTop: 6 }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function formatDistance(meters: number): string {
+  return meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`;
 }
