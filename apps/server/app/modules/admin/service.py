@@ -96,8 +96,13 @@ class AdminService:
         self._db = db
         self._sos_repo = SOSRepository(db)
 
-    async def list_incidents(self, status: str | None = None) -> list[AdminIncidentOut]:
-        incidents = await self._sos_repo.list_all(limit=100, status=status)
+    async def list_incidents(
+        self,
+        status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[AdminIncidentOut]:
+        incidents = await self._sos_repo.list_all(limit=limit, offset=offset, status=status)
         return [_incident_to_out(i) for i in incidents]
 
     async def get_incident_detail(self, incident_id: str, admin_id: str, admin_email: str) -> AdminIncidentDetailOut:

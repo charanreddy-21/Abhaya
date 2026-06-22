@@ -1,4 +1,5 @@
 import hashlib
+import json
 import os
 import pathlib
 
@@ -18,6 +19,7 @@ from apps.server.app.shared.errors import (
     forbidden,
     sos_not_found,
 )
+from apps.server.app.shared.models import AuditEvent
 
 ALLOWED_MIME_PREFIXES = ("video/", "audio/", "image/")
 
@@ -83,6 +85,22 @@ class EvidenceService:
 
         # Immediately "anchor" the hash (in production: submit to OpenTimestamps)
         item = await self._repo.anchor(item)
+
+        audit = AuditEvent(
+            actor_id=user_id,
+            action="evidence.upload",
+            resource_type="evidence",
+            resource_id=item.id,
+            metadata_json=json.dumps({
+                "incident_id": meta.incident_id,
+                "kind": meta.kind,
+                "size_bytes": size_bytes,
+                "sha256_hash": actual_hash,
+            }),
+        )
+        self._db.add(audit)
+        await self._db.commit()
+
         return _to_out(item)
 
     async def list_for_user(self, user_id: str) -> list[EvidenceOut]:
@@ -105,6 +123,20 @@ class EvidenceService:
             pass
 
         await self._repo.delete(item)
+
+        audit = AuditEvent(
+            actor_id=user_id,
+            action="evidence.delete",
+            resource_type="evidence",
+            resource_id=evidence_id,
+            metadata_json=json.dumps({
+                "kind": item.kind,
+                "label": item.label,
+                "sha256_hash": item.sha256_hash,
+            }),
+        )
+        self._db.add(audit)
+        await self._db.commit()
 
     async def get_file_path(self, evidence_id: str, user_id: str) -> pathlib.Path:
         item = await self._repo.get_by_id(evidence_id)

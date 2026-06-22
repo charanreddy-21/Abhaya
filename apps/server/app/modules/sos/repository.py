@@ -38,7 +38,7 @@ class SOSRepository:
         )
         return list(result.scalars().all())
 
-    async def list_all(self, limit: int = 50, status: str | None = None) -> list[Incident]:
+    async def list_all(self, limit: int = 50, offset: int = 0, status: str | None = None) -> list[Incident]:
         q = select(Incident).options(
             selectinload(Incident.witness_alerts),
             selectinload(Incident.evidence_items),
@@ -46,7 +46,7 @@ class SOSRepository:
         )
         if status:
             q = q.where(Incident.status == status)
-        q = q.order_by(Incident.created_at.desc()).limit(limit)
+        q = q.order_by(Incident.created_at.desc()).limit(limit).offset(offset)
         result = await self._db.execute(q)
         return list(result.scalars().all())
 

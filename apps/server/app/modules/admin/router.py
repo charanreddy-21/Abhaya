@@ -21,10 +21,12 @@ async def metrics(admin=Depends(require_admin), db: AsyncSession = Depends(get_d
 @router.get("/incidents", response_model=list[AdminIncidentOut])
 async def list_incidents(
     status: str | None = Query(None, pattern="^(active|resolved)$"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     admin=Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    return await AdminService(db).list_incidents(status)
+    return await AdminService(db).list_incidents(status=status, limit=limit, offset=offset)
 
 
 @router.get("/incidents/{incident_id}", response_model=AdminIncidentDetailOut)
