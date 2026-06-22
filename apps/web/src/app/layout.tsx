@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { AppShell } from '@/components/layout/app-shell';
 import { AuthProvider } from '@/lib/auth-context';
 import { ToastProvider } from '@/components/ui/toast';
+import { SWRegister } from '@/components/layout/sw-register';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
+        <SWRegister />
         <AuthProvider>
           <ToastProvider>
             <AppShell>{children}</AppShell>
