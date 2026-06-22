@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   FileVideo,
+  History,
   LayoutDashboard,
   LogIn,
   LogOut,
@@ -19,13 +20,14 @@ import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
-  { href: '/',             icon: LayoutDashboard, label: 'Home' },
-  { href: '/sos/active',   icon: Siren,           label: 'SOS',        accent: true },
-  { href: '/witness/alert',icon: Users,            label: 'Witness' },
-  { href: '/evidence',     icon: FileVideo,        label: 'Evidence' },
-  { href: '/safe-places',  icon: MapPin,           label: 'Safe Places' },
-  { href: '/admin',        icon: ShieldAlert,      label: 'Admin',      adminOnly: true },
-  { href: '/settings',     icon: Settings,         label: 'Settings' },
+  { href: '/',              icon: LayoutDashboard, label: 'Home' },
+  { href: '/sos/active',    icon: Siren,           label: 'SOS',        accent: true },
+  { href: '/sos/history',   icon: History,         label: 'History',    authOnly: true },
+  { href: '/witness/alert', icon: Users,            label: 'Witness' },
+  { href: '/evidence',      icon: FileVideo,        label: 'Evidence' },
+  { href: '/safe-places',   icon: MapPin,           label: 'Safe Places' },
+  { href: '/admin',         icon: ShieldAlert,      label: 'Admin',      adminOnly: true },
+  { href: '/settings',      icon: Settings,         label: 'Settings' },
 ];
 
 export function SideNav() {
@@ -49,7 +51,11 @@ export function SideNav() {
       </Link>
 
       <div className="side-nav-links">
-        {NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin).map(({ href, icon: Icon, label, accent }) => {
+        {NAV_ITEMS.filter((item) => {
+          if (item.adminOnly && !isAdmin) return false;
+          if ((item as { authOnly?: boolean }).authOnly && !isAuthenticated) return false;
+          return true;
+        }).map(({ href, icon: Icon, label, accent }) => {
           const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
           return (
             <Link

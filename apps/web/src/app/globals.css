@@ -2923,6 +2923,100 @@ h1, h2, h3 { margin: 0; }
 .modal-body  { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.5; }
 .modal-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 
+/* ─── SOS History ────────────────────────────────────────────── */
+.sos-history-view { max-width: 700px; }
+
+.history-summary-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.history-summary-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--muted);
+}
+
+.history-summary-chip.resolved { color: var(--forest); border-color: var(--forest-soft); background: var(--forest-soft); }
+.history-summary-chip.total    { color: var(--teal);   border-color: var(--teal-soft);   background: var(--teal-soft); }
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.history-row:hover { box-shadow: var(--shadow-sm); }
+
+.history-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.history-status-dot.dot-active   { background: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
+.history-status-dot.dot-resolved { background: var(--forest); }
+
+.history-row-body { flex: 1; }
+
+.history-row-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.history-incident-id {
+  font-size: 13px;
+  font-weight: 650;
+  font-family: monospace;
+  color: var(--ink);
+}
+
+.history-row-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.history-date {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.history-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 /* ─── AuthGuard states ───────────────────────────────────────── */
 .auth-guard-loading {
   display: flex;
