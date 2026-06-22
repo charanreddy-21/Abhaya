@@ -6,6 +6,7 @@ import { WifiOff } from 'lucide-react';
 import { BottomNav } from './bottom-nav';
 import { SideNav } from './side-nav';
 import { CursorGlow } from '@/components/ui/cursor-glow';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { useOnlineStatus } from '@/lib/hooks';
 
 // Routes where shell nav is hidden (auth pages, full-screen flows)
@@ -32,7 +33,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="shell-root">
         <SideNav />
         <main className="shell-main">
-          {children}
+          <ErrorBoundary>{children}</ErrorBoundary>
         </main>
         <BottomNav />
       </div>

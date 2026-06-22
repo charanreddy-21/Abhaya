@@ -2622,6 +2622,32 @@ h1, h2, h3 { margin: 0; }
 .error-state h3 { margin: 0; color: var(--ink); font-size: 16px; }
 .error-state p { margin: 0; font-size: 14px; max-width: 320px; line-height: 1.5; }
 
+/* ─── Error boundary fallback ────────────────────────────────── */
+.error-boundary-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 64px 24px;
+  text-align: center;
+  color: var(--muted);
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+.error-boundary-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: var(--amber-soft);
+  color: var(--amber);
+  display: grid;
+  place-items: center;
+}
+
+.error-boundary-fallback h2 { color: var(--ink); font-size: 18px; margin: 0; }
+.error-boundary-fallback p  { font-size: 14px; line-height: 1.6; max-width: 320px; margin: 0; }
+
 /* ─── Spin animation ─────────────────────────────────────────── */
 .spin { animation: spinAnim 0.8s linear infinite; }
 
