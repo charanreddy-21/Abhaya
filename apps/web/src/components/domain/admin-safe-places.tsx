@@ -44,32 +44,31 @@ export function AdminSafePlacesView() {
   const { mutate: doVerify, isLoading: verifying } = useMutation(
     ({ id, level }: { id: string; level: VerificationLevel }) =>
       adminApi.verifySafePlace(id, level),
-    {
-      onSuccess: () => { toast('Verification updated.', 'ok'); refresh(); },
-      onError: (e) => toast(e.message, 'error'),
-    },
   );
 
   const { mutate: doToggleOpen } = useMutation(
     ({ id, is_open }: { id: string; is_open: boolean }) =>
       adminApi.setSafePlaceOpen(id, is_open),
-    {
-      onSuccess: () => { toast('Status updated.', 'ok'); refresh(); },
-      onError: (e) => toast(e.message, 'error'),
-    },
   );
 
   const { mutate: doDelete } = useMutation(
     (id: string) => adminApi.deleteSafePlace(id),
-    {
-      onSuccess: () => { toast('Safe place removed.', 'ok'); refresh(); },
-      onError: (e) => toast(e.message, 'error'),
-    },
   );
 
-  function confirmDelete(place: SafePlace) {
+  async function handleVerify(id: string, level: VerificationLevel) {
+    try { await doVerify({ id, level }); toast('Verification updated.', 'ok'); refresh(); }
+    catch (e) { toast(e instanceof Error ? e.message : 'Failed.', 'warn'); }
+  }
+
+  async function handleToggleOpen(id: string, is_open: boolean) {
+    try { await doToggleOpen({ id, is_open }); toast('Status updated.', 'ok'); refresh(); }
+    catch (e) { toast(e instanceof Error ? e.message : 'Failed.', 'warn'); }
+  }
+
+  async function confirmDelete(place: SafePlace) {
     if (!window.confirm(`Remove "${place.name}"? This cannot be undone.`)) return;
-    doDelete(place.id);
+    try { await doDelete(place.id); toast('Safe place removed.', 'ok'); refresh(); }
+    catch (e) { toast(e instanceof Error ? e.message : 'Failed.', 'warn'); }
   }
 
   const kindCounts = (places ?? []).reduce<Record<string, number>>((acc, p) => {
@@ -162,7 +161,7 @@ export function AdminSafePlacesView() {
                   <button
                     type="button"
                     className={`admin-sp-open-toggle ${place.is_open ? 'is-open' : ''}`}
-                    onClick={() => doToggleOpen({ id: place.id, is_open: !place.is_open })}
+                    onClick={() => handleToggleOpen(place.id, !place.is_open)}
                     aria-label={`Mark as ${place.is_open ? 'closed' : 'open'}`}
                     title={`Currently ${place.is_open ? 'open' : 'closed'} — click to toggle`}
                   >
@@ -178,7 +177,7 @@ export function AdminSafePlacesView() {
                     value={place.verification_level}
                     disabled={verifying}
                     onChange={(e) =>
-                      doVerify({ id: place.id, level: e.target.value as VerificationLevel })
+                      handleVerify(place.id, e.target.value as VerificationLevel)
                     }
                     aria-label={`Verification level for ${place.name}`}
                   >

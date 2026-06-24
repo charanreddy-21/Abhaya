@@ -25,11 +25,10 @@ const ACTION_FILTERS = [
 
 const PAGE_SIZE = 50;
 
-function actionTone(action: string): 'danger' | 'warn' | 'ok' | 'info' | 'teal' {
+function actionTone(action: string): 'danger' | 'warn' | 'ok' | 'info' {
   if (action.includes('failed') || action.includes('delete')) return 'danger';
   if (action.includes('admin') || action.includes('reveal')) return 'warn';
   if (action.includes('resolve')) return 'ok';
-  if (action.includes('sos') || action.includes('evidence')) return 'teal';
   return 'info';
 }
 

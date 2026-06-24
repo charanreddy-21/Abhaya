@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -10,11 +10,17 @@ import {
 import { sosApi, witnessApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/components/ui/toast';
-import { useGeolocation, useElapsedSeconds, formatElapsed } from '@/lib/hooks';
+import { useGeolocation, useElapsedSeconds, useOnlineStatus, formatElapsed } from '@/lib/hooks';
 import { AbhayaApiError, NetworkError } from '@/lib/api-client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Panel } from '@/components/ui/panel';
+import {
+  enqueuePendingSOS,
+  getPendingSOS,
+  clearPendingSOS,
+  isPendingSOSStale,
+} from '@/lib/offline-queue';
 import type { Incident, WitnessAlert } from '@/lib/types';
 
 export function ActiveSOSView() {
@@ -22,19 +28,58 @@ export function ActiveSOSView() {
   const { isAuthenticated } = useAuth();
   const { toast } = useToast();
   const geo = useGeolocation();
+  const isOnline = useOnlineStatus();
 
-  const [incident, setIncident]   = useState<Incident | null>(null);
-  const [witnesses, setWitnesses] = useState<WitnessAlert[]>([]);
-  const [creating, setCreating]   = useState(false);
-  const [resolving, setResolving] = useState(false);
-  const [error, setError]         = useState<string | null>(null);
-  const [phase, setPhase]         = useState<'idle' | 'arming' | 'active' | 'resolved'>('idle');
+  const [incident, setIncident]     = useState<Incident | null>(null);
+  const [witnesses, setWitnesses]   = useState<WitnessAlert[]>([]);
+  const [creating, setCreating]     = useState(false);
+  const [resolving, setResolving]   = useState(false);
+  const [error, setError]           = useState<string | null>(null);
+  const [phase, setPhase]           = useState<'idle' | 'arming' | 'pending' | 'active' | 'resolved'>('idle');
 
-  const elapsed = useElapsedSeconds(incident?.created_at ?? null);
+  const retryRef = useRef(false);
+  const elapsed  = useElapsedSeconds(incident?.created_at ?? null);
 
   useEffect(() => {
     if (!isAuthenticated) router.push('/auth/login');
   }, [isAuthenticated, router]);
+
+  // On mount: check for a stale pending SOS from a previous session
+  useEffect(() => {
+    const pending = getPendingSOS();
+    if (!pending) return;
+    if (isPendingSOSStale(pending)) {
+      clearPendingSOS();
+      return;
+    }
+    setPhase('pending');
+    setError('SOS was queued while offline. It will send automatically when the network returns.');
+  }, []);
+
+  // Auto-retry pending SOS when the network comes back
+  useEffect(() => {
+    if (!isOnline || phase !== 'pending' || retryRef.current) return;
+    const pending = getPendingSOS();
+    if (!pending) { setPhase('idle'); setError(null); return; }
+
+    retryRef.current = true;
+    setCreating(true);
+    sosApi.create(pending.payload)
+      .then((inc) => {
+        clearPendingSOS();
+        setIncident(inc);
+        setPhase('active');
+        setError(null);
+        toast('SOS sent. Nearby opted-in witnesses are being alerted.', 'danger', 6000);
+      })
+      .catch((err) => {
+        const msg = err instanceof AbhayaApiError ? err.message
+          : 'Retry failed. Keep this screen open — Abhaya will try again.';
+        setError(msg);
+        retryRef.current = false;
+      })
+      .finally(() => setCreating(false));
+  }, [isOnline, phase, toast]);
 
   // Poll witnesses while active
   useEffect(() => {
@@ -61,24 +106,31 @@ export function ActiveSOSView() {
 
     setCreating(true);
     setError(null);
+
+    const payload = {
+      lat:             geo.position?.latitude  ?? 12.9352,
+      lng:             geo.position?.longitude ?? 77.6245,
+      accuracy_meters: geo.position?.accuracy  ?? 999,
+    };
+
     try {
-      const payload = {
-        lat:             geo.position?.latitude  ?? 12.9352,
-        lng:             geo.position?.longitude ?? 77.6245,
-        accuracy_meters: geo.position?.accuracy  ?? 999,
-      };
       const inc = await sosApi.create(payload);
       setIncident(inc);
       setPhase('active');
       toast('SOS active. Nearby opted-in witnesses are being alerted.', 'danger', 6000);
     } catch (err) {
-      const msg = err instanceof AbhayaApiError ? err.message
-        : err instanceof NetworkError
-        ? 'Server unreachable. Keep this screen open — Abhaya will retry.'
-        : 'Could not start SOS. Please try again.';
-      setError(msg);
-      setPhase('idle');
-      toast(msg, 'warn');
+      if (err instanceof NetworkError) {
+        enqueuePendingSOS(payload);
+        setPhase('pending');
+        const msg = 'Server unreachable. SOS is queued locally and will send when the network returns.';
+        setError(msg);
+        toast(msg, 'warn', 8000);
+      } else {
+        const msg = err instanceof AbhayaApiError ? err.message : 'Could not start SOS. Please try again.';
+        setError(msg);
+        setPhase('idle');
+        toast(msg, 'warn');
+      }
     } finally {
       setCreating(false);
     }
@@ -100,10 +152,12 @@ export function ActiveSOSView() {
   }
 
   function reset() {
+    clearPendingSOS();
     setIncident(null);
     setWitnesses([]);
     setPhase('idle');
     setError(null);
+    retryRef.current = false;
   }
 
   return (
@@ -129,10 +183,11 @@ export function ActiveSOSView() {
                 error={error}
                 onAction={handleAction}
                 onResolve={resolveIncident}
+                onCancelPending={reset}
               />
             </div>
             <div className="sos-right-col">
-              <IncidentStatusBar incident={incident} geoAccuracy={geo.position?.accuracy ?? null} />
+              <IncidentStatusBar incident={incident} geoAccuracy={geo.position?.accuracy ?? null} phase={phase} />
               {incident && <WitnessPanel witnesses={witnesses} />}
               <SafetyNotice />
             </div>
@@ -149,13 +204,16 @@ function SOSHeader({ phase, elapsed, incident }: {
   phase: string; elapsed: number; incident: Incident | null;
 }) {
   const titles: Record<string, string> = {
-    idle: 'SOS Ready', arming: 'Confirm SOS',
-    active: 'SOS Active', resolved: 'Incident Resolved',
+    idle:     'SOS Ready',
+    arming:   'Confirm SOS',
+    pending:  'SOS Queued',
+    active:   'SOS Active',
+    resolved: 'Incident Resolved',
   };
   return (
     <div className="sos-page-header">
       <div className="sos-header-left">
-        {phase === 'active' && <span className="live-dot" aria-hidden />}
+        {(phase === 'active' || phase === 'pending') && <span className="live-dot" aria-hidden />}
         <div>
           <h1 className="page-title" style={{ margin: 0, fontSize: '20px' }}>
             {titles[phase] ?? 'SOS'}
@@ -170,6 +228,9 @@ function SOSHeader({ phase, elapsed, incident }: {
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         {phase === 'active' && (
           <Badge tone="danger" icon={<Clock3 size={13} />}>{formatElapsed(elapsed)}</Badge>
+        )}
+        {phase === 'pending' && (
+          <Badge tone="warn" icon={<WifiOff size={13} />}>Queued offline</Badge>
         )}
         {incident && (
           <>
@@ -220,9 +281,9 @@ function SOSMapZone({ incident, witnesses, geoReady }: {
   );
 }
 
-function SOSPrimaryAction({ phase, creating, resolving, error, onAction, onResolve }: {
+function SOSPrimaryAction({ phase, creating, resolving, error, onAction, onResolve, onCancelPending }: {
   phase: string; creating: boolean; resolving: boolean;
-  error: string | null; onAction: () => void; onResolve: () => void;
+  error: string | null; onAction: () => void; onResolve: () => void; onCancelPending: () => void;
 }) {
   return (
     <div className="sos-action-panel">
@@ -232,7 +293,28 @@ function SOSPrimaryAction({ phase, creating, resolving, error, onAction, onResol
           {error}
         </div>
       )}
-      {phase !== 'active' ? (
+
+      {phase === 'pending' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <button
+            className="sos-button is-arming"
+            disabled
+            type="button"
+            aria-live="polite"
+          >
+            <Loader2 size={28} className="spin" />
+            <span>Waiting for network…</span>
+            <small>SOS will send automatically when connected</small>
+          </button>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={onCancelPending}
+            type="button"
+          >
+            <X size={14} /> Cancel queued SOS
+          </button>
+        </div>
+      ) : phase !== 'active' ? (
         <button
           className={`sos-button ${phase === 'arming' ? 'is-arming' : ''}`}
           onClick={onAction}
@@ -257,6 +339,7 @@ function SOSPrimaryAction({ phase, creating, resolving, error, onAction, onResol
           <small>Press when you are safe</small>
         </button>
       )}
+
       <div className="sos-panel-meta">
         <span><Shield size={15} /> No police dispatch</span>
         <span><Radio size={15} /> Witness alerts only</span>
@@ -266,8 +349,8 @@ function SOSPrimaryAction({ phase, creating, resolving, error, onAction, onResol
   );
 }
 
-function IncidentStatusBar({ incident, geoAccuracy }: {
-  incident: Incident | null; geoAccuracy: number | null;
+function IncidentStatusBar({ incident, geoAccuracy, phase }: {
+  incident: Incident | null; geoAccuracy: number | null; phase: string;
 }) {
   const locTone = geoAccuracy == null ? 'warn' : geoAccuracy < 200 ? 'ok' : 'danger';
   const locLabel = geoAccuracy != null
@@ -278,8 +361,9 @@ function IncidentStatusBar({ incident, geoAccuracy }: {
     <Panel eyebrow="Status" icon={<Activity size={18} />} title="Incident status">
       <div className="status-chip-row">
         <div className={`status-chip tone-${locTone}`}><MapPin size={13} /> {locLabel}</div>
-        <div className={`status-chip tone-${incident ? 'ok' : 'warn'}`}>
-          <Radio size={13} /> {incident ? `${incident.witness_alert_count} alerted` : 'Standby'}
+        <div className={`status-chip tone-${incident ? 'ok' : phase === 'pending' ? 'warn' : 'warn'}`}>
+          <Radio size={13} />{' '}
+          {incident ? `${incident.witness_alert_count} alerted` : phase === 'pending' ? 'Queued' : 'Standby'}
         </div>
         <div className="status-chip tone-info">
           <FileVideo size={13} /> {incident ? `${incident.evidence_count} items` : 'Ready'}

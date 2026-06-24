@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   AlertTriangle, Building2, CheckCircle2, ChevronRight,
-  Flame, Loader2, MapPin, Navigation, Shield, ShoppingBag,
+  Flame, Layers, Loader2, MapPin, Navigation, Shield, ShoppingBag,
   Siren, X,
 } from 'lucide-react';
 import { safePlacesApi } from '@/lib/api';
@@ -17,6 +18,12 @@ import { Button } from '@/components/ui/button';
 import { Panel } from '@/components/ui/panel';
 import { PageHeader } from '@/components/ui/page-header';
 import type { CreateSafePlacePayload, SafePlace, SafePlaceKind, VerificationLevel } from '@/lib/types';
+import type { MapMarker } from '@/components/ui/leaflet-map';
+
+const LeafletMap = dynamic(
+  () => import('@/components/ui/leaflet-map').then((m) => m.LeafletMap),
+  { ssr: false, loading: () => <div className="map-loading-placeholder">Loading map…</div> },
+);
 
 type KindFilter = 'all' | SafePlaceKind;
 
@@ -34,6 +41,10 @@ const KIND_TONE: Record<SafePlaceKind, string> = {
 
 const ALL_KINDS: KindFilter[] = ['all', 'police', 'hospital', 'pharmacy', 'petrol', 'shelter'];
 
+const KIND_COLORS: Record<SafePlaceKind, MapMarker['color']> = {
+  police: 'forest', hospital: 'red', pharmacy: 'teal', petrol: 'amber', shelter: 'slate',
+};
+
 export function SafePlacesView() {
   const { toast } = useToast();
   const geo = useGeolocation();
@@ -41,6 +52,7 @@ export function SafePlacesView() {
   const [kindFilter, setKindFilter]     = useState<KindFilter>('all');
   const [selected, setSelected]         = useState<SafePlace | null>(null);
   const [showSubmit, setShowSubmit]     = useState(false);
+  const [showMap, setShowMap]           = useState(false);
 
   const { data: places, isLoading, error, refresh } = useQuery(
     () => safePlacesApi.list({
@@ -71,18 +83,74 @@ export function SafePlacesView() {
         }
       />
 
-      <div className="filter-tabs">
-        {ALL_KINDS.map((k) => (
-          <button
-            key={k}
-            className={`filter-tab ${kindFilter === k ? 'is-active' : ''}`}
-            onClick={() => setKindFilter(k)}
-            type="button"
-          >
-            {k === 'all' ? 'All' : KIND_META[k as SafePlaceKind].label}
-          </button>
-        ))}
+      <div className="safe-places-toolbar">
+        <div className="filter-tabs">
+          {ALL_KINDS.map((k) => (
+            <button
+              key={k}
+              className={`filter-tab ${kindFilter === k ? 'is-active' : ''}`}
+              onClick={() => setKindFilter(k)}
+              type="button"
+            >
+              {k === 'all' ? 'All' : KIND_META[k as SafePlaceKind].label}
+            </button>
+          ))}
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={<Layers size={14} />}
+          onClick={() => setShowMap((s) => !s)}
+        >
+          {showMap ? 'List' : 'Map'}
+        </Button>
       </div>
+
+      <AnimatePresence>
+        {showMap && (
+          <motion.div
+            className="safe-places-map-panel"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 320, opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            {geo.position ? (
+              <LeafletMap
+                center={[geo.position.latitude, geo.position.longitude]}
+                zoom={14}
+                height="100%"
+                markers={[
+                  // User location
+                  {
+                    lat:   geo.position.latitude,
+                    lng:   geo.position.longitude,
+                    label: 'Your location',
+                    color: 'teal',
+                    popup: 'You are here',
+                  },
+                  // Safe place markers
+                  ...(places ?? []).map((p): MapMarker => ({
+                    lat:   p.lat,
+                    lng:   p.lng,
+                    label: p.name,
+                    color: KIND_COLORS[p.kind],
+                    popup: `${p.name}${p.address ? ` — ${p.address}` : ''}`,
+                  })),
+                ]}
+              />
+            ) : (
+              <div className="map-no-location">
+                <MapPin size={24} />
+                <p>Enable location to show places on the map.</p>
+                <Button variant="secondary" size="sm" onClick={geo.request}>
+                  Share location
+                </Button>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="safe-places-layout">
         <div className="safe-places-list-col">

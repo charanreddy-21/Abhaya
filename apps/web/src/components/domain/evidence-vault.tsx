@@ -8,6 +8,7 @@ import {
   Shield, Trash2, X,
 } from 'lucide-react';
 import { evidenceApi, sosApi } from '@/lib/api';
+import { encryptEvidence } from '@/lib/evidence-crypto';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/components/ui/toast';
 import { useQuery, useMutation } from '@/lib/hooks';
@@ -67,17 +68,19 @@ export function EvidenceVaultView() {
 
     setUploading(true);
     try {
-      const buffer = await file.arrayBuffer();
-      const hashBuf = await crypto.subtle.digest('SHA-256', buffer);
-      const sha256Hash = Array.from(new Uint8Array(hashBuf))
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
-
       const kind: EvidenceKind = file.type.startsWith('video') ? 'video'
         : file.type.startsWith('audio') ? 'audio' : 'photo';
 
-      await evidenceApi.upload(activeIncident.id, kind, file.name, sha256Hash, file);
-      toast('Evidence uploaded and hash anchored.', 'ok');
+      // Encrypt before upload; sha256Hash is of the plaintext for integrity
+      const { encryptedBlob, sha256Hash } = await encryptEvidence(file, activeIncident.id);
+
+      // Upload the encrypted blob; server stores ciphertext, we keep the key in sessionStorage
+      const encryptedFile = new File([encryptedBlob], file.name + '.enc', {
+        type: 'application/octet-stream',
+      });
+
+      await evidenceApi.upload(activeIncident.id, kind, file.name, sha256Hash, encryptedFile);
+      toast('Evidence encrypted and uploaded. Hash anchored for integrity.', 'ok');
       refresh();
     } catch (err) {
       toast(err instanceof AbhayaApiError ? err.message : 'Upload failed. File may be too large or unsupported.', 'warn');

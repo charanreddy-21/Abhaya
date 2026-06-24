@@ -97,11 +97,12 @@ export function useMutation<TArgs extends unknown[], TResult>(
 // ── useOnlineStatus — network connectivity ────────────────────────────────────
 
 export function useOnlineStatus(): boolean {
-  const [online, setOnline] = useState(() =>
-    typeof navigator !== 'undefined' ? navigator.onLine : true,
-  );
+  // Start true on both server and client first paint to avoid hydration mismatch.
+  // useEffect syncs with actual browser state after hydration.
+  const [online, setOnline] = useState(true);
 
   useEffect(() => {
+    setOnline(navigator.onLine);
     const up = () => setOnline(true);
     const down = () => setOnline(false);
     window.addEventListener('online', up);

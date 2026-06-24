@@ -1,12 +1,18 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   AlertTriangle, Bell, Check, Eye, EyeOff,
   Loader2, MapPin, Shield, Users, X,
 } from 'lucide-react';
+
+const LeafletMap = dynamic(
+  () => import('@/components/ui/leaflet-map').then((m) => m.LeafletMap),
+  { ssr: false, loading: () => <div className="map-loading-placeholder" style={{ height: 160 }}>Loading map…</div> },
+);
 import { witnessApi, authApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/components/ui/toast';
@@ -208,6 +214,27 @@ function WitnessAlertCard({ alert, index, onAcknowledge, onReveal, acking }: {
           Your location is not shared with the person in distress
         </div>
       </div>
+
+      {alert.incident_approx_lat && alert.incident_approx_lng && (
+        <div className="witness-incident-map">
+          <LeafletMap
+            center={[alert.incident_approx_lat, alert.incident_approx_lng]}
+            zoom={14}
+            height={160}
+            interactive={false}
+            markers={[{
+              lat:   alert.incident_approx_lat,
+              lng:   alert.incident_approx_lng,
+              label: 'Approximate incident area',
+              color: 'red',
+              popup: 'Approximate area only — exact location is private',
+            }]}
+          />
+          <p className="witness-map-caption">
+            Approximate incident area · Exact location is not shared
+          </p>
+        </div>
+      )}
 
       <div className="witness-alert-card-actions">
         {alert.status === 'alerted' && (
