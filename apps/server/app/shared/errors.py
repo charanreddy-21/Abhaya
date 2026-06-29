@@ -64,6 +64,9 @@ def evidence_limit_reached() -> AbhayaError:
 def evidence_hash_mismatch() -> AbhayaError:
     return _err("EVIDENCE_HASH_MISMATCH", "The file hash does not match the declared hash. The file may be corrupted.", 422)
 
+def evidence_unsupported_type() -> AbhayaError:
+    return _err("EVIDENCE_UNSUPPORTED_TYPE", "Evidence must be an audio, photo, or video file.", 422)
+
 # Witness alerts
 def witness_alert_not_found() -> AbhayaError:
     return _err("WITNESS_ALERT_NOT_FOUND", "That witness alert was not found.", 404)

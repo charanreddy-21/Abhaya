@@ -84,6 +84,10 @@ class TrustedContactsService:
     ) -> ContactResponse:
         row = await self._get_owned_contact(contact_id, user_id)
         updates = payload.model_dump(exclude_none=True)
+        if "phone_number" in updates:
+            existing = await self._repo.list_for_user(user_id)
+            if any(c["id"] != contact_id and c["phone_number"] == updates["phone_number"] for c in existing):
+                raise contact_already_exists()
         if updates:
             row = await self._repo.update(contact_id, **updates)
         return self._to_response(row)

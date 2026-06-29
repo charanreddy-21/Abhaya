@@ -16,6 +16,7 @@ from apps.server.app.shared.errors import (
     evidence_limit_reached,
     evidence_not_found,
     evidence_too_large,
+    evidence_unsupported_type,
     forbidden,
     sos_not_found,
 )
@@ -30,6 +31,7 @@ def _to_out(item) -> EvidenceOut:
 
 class EvidenceService:
     def __init__(self, db: AsyncSession) -> None:
+        self._db = db
         self._repo = EvidenceRepository(db)
         self._sos_repo = SOSRepository(db)
         self._upload_dir = pathlib.Path(settings.evidence_upload_dir)
@@ -47,6 +49,9 @@ class EvidenceService:
         count = await self._repo.count_for_incident(meta.incident_id)
         if count >= settings.max_evidence_per_incident:
             raise evidence_limit_reached()
+
+        if file.content_type and not file.content_type.startswith(ALLOWED_MIME_PREFIXES):
+            raise evidence_unsupported_type()
 
         # Read file into memory to check size and hash
         contents = await file.read()

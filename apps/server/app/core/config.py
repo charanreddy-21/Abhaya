@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     max_trusted_contacts_per_user: int = 5
 
     # CORS
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] | str = ["http://localhost:3000"]
 
     @field_validator("cors_origins", mode="before")
     @classmethod
