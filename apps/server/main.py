@@ -5,9 +5,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from apps.server.app.core.config import settings
-from apps.server.app.core.database import init_db
+from apps.server.app.core.database import init_db, SessionLocal
 from apps.server.app.modules.admin.router import router as admin_router
 from apps.server.app.modules.auth.router import router as auth_router
 from apps.server.app.modules.evidence.router import router as evidence_router
@@ -15,12 +16,34 @@ from apps.server.app.modules.notifications.router import router as notifications
 from apps.server.app.modules.safe_places.router import router as safe_places_router
 from apps.server.app.modules.sos.router import router as sos_router
 from apps.server.app.modules.witness_alerts.router import router as witness_router
-from apps.server.app.shared.errors import AbhayaError, abhaya_error_handler, http_exception_handler
+from apps.server.app.shared.errors import (
+    AbhayaError,
+    abhaya_error_handler,
+    http_exception_handler,
+)
+from apps.server.app.modules.safe_trip.router import router as trip_router
+from apps.server.app.modules.trusted_contacts.router import router as contacts_router
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     await init_db()
+
+    # Wire services into app.state once at startup.
+    # Repositories receive a session_factory, NOT an open session,
+    # so each repo method opens its own connection per request.
+    from apps.server.app.modules.safe_trip.service import SafeTripService
+    from apps.server.app.modules.safe_trip.repository import SafeTripRepository
+    from apps.server.app.modules.trusted_contacts.service import TrustedContactsService
+    from apps.server.app.modules.trusted_contacts.repository import TrustedContactsRepository
+
+    application.state.safe_trip_service = SafeTripService(
+        repo=SafeTripRepository(session_factory=SessionLocal),
+    )
+    application.state.trusted_contacts_service = TrustedContactsService(
+        repo=TrustedContactsRepository(session_factory=SessionLocal),
+    )
+
     await _seed_if_empty()
     yield
 
@@ -51,12 +74,12 @@ app.include_router(evidence_router)
 app.include_router(safe_places_router)
 app.include_router(admin_router)
 app.include_router(notifications_router)
+# Routers already define their own prefix — do NOT pass prefix= here.
+app.include_router(trip_router)
+app.include_router(contacts_router)
 
 
-# ── Health ─────────────────────────────────────────────────────────────────────
-
-from pydantic import BaseModel
-
+# ── Health ──────────────────────────────────────────────────────────────────
 
 class SystemStatus(BaseModel):
     status: int
@@ -75,11 +98,10 @@ async def health_check():
     )
 
 
-# ── Seed ───────────────────────────────────────────────────────────────────────
+# ── Seed ────────────────────────────────────────────────────────────────────
 
 async def _seed_if_empty() -> None:
     """Populate demo data on first run so the UI has something to show."""
-    from apps.server.app.core.database import SessionLocal
     from apps.server.app.core.security import hash_password
     from apps.server.app.modules.safe_places.repository import SafePlaceRepository
     from apps.server.app.modules.auth.repository import UserRepository
@@ -88,9 +110,8 @@ async def _seed_if_empty() -> None:
     async with SessionLocal() as db:
         place_repo = SafePlaceRepository(db)
         if await place_repo.count() > 0:
-            return  # already seeded
+            return
 
-        # Demo users
         user_repo = UserRepository(db)
 
         demo_user = await user_repo.get_by_email("demo@abhaya.in")
@@ -112,7 +133,6 @@ async def _seed_if_empty() -> None:
                 role="admin",
             )
 
-        # Witness user (will receive alerts)
         witness_user = await user_repo.get_by_email("witness@abhaya.in")
         if not witness_user:
             witness_user = await user_repo.create(
@@ -123,7 +143,6 @@ async def _seed_if_empty() -> None:
             )
             witness_user = await user_repo.update(witness_user, witness_opt_in=True)
 
-        # Safe places around Koramangala, Bengaluru
         seed_places = [
             dict(name="Koramangala Police Station", kind="police", lat=12.9352, lng=77.6245,
                  address="80 Feet Road, Koramangala 4th Block, Bengaluru 560034",
