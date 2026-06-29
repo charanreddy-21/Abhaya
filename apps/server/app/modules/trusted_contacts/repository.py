@@ -7,7 +7,10 @@ Accepts a session_factory so the service can be wired once at startup.
 
 from datetime import datetime, timezone
 from typing import Optional, Callable, Any
-import uuid
+
+from sqlalchemy import delete, select
+
+from apps.server.app.shared.models import TrustedContact
 
 
 class TrustedContactsRepository:
@@ -15,12 +18,19 @@ class TrustedContactsRepository:
         self._session_factory = session_factory
 
     async def list_for_user(self, user_id: str) -> list[dict]:
-        # TODO: SELECT * FROM trusted_contacts WHERE user_id = :user_id
-        return []
+        async with self._session_factory() as db:
+            result = await db.execute(
+                select(TrustedContact)
+                .where(TrustedContact.user_id == user_id)
+                .order_by(TrustedContact.created_at.asc())
+            )
+            return [_to_dict(row) for row in result.scalars().all()]
 
     async def get_by_id(self, contact_id: str) -> Optional[dict]:
-        # TODO: SELECT * FROM trusted_contacts WHERE id = :contact_id
-        return None
+        async with self._session_factory() as db:
+            result = await db.execute(select(TrustedContact).where(TrustedContact.id == contact_id))
+            row = result.scalar_one_or_none()
+            return _to_dict(row) if row else None
 
     async def create(
         self,
@@ -29,22 +39,42 @@ class TrustedContactsRepository:
         phone_number: str,
         channel: str,
     ) -> dict:
-        now = datetime.now(timezone.utc).isoformat()
-        row = {
-            "id": str(uuid.uuid4()),
-            "user_id": user_id,
-            "name": name,
-            "phone_number": phone_number,  # stored encrypted in real impl
-            "channel": channel,
-            "created_at": now,
-        }
-        # TODO: persist to trusted_contacts table
-        return row
+        async with self._session_factory() as db:
+            row = TrustedContact(
+                user_id=user_id,
+                name=name,
+                phone_number=phone_number,
+                channel=channel,
+            )
+            db.add(row)
+            await db.commit()
+            await db.refresh(row)
+            return _to_dict(row)
 
     async def update(self, contact_id: str, **kwargs) -> dict:
-        # TODO: UPDATE trusted_contacts SET ... WHERE id = :contact_id
-        raise NotImplementedError("trusted_contacts table not yet migrated")
+        async with self._session_factory() as db:
+            result = await db.execute(select(TrustedContact).where(TrustedContact.id == contact_id))
+            row = result.scalar_one()
+            for key, value in kwargs.items():
+                if hasattr(row, key):
+                    setattr(row, key, value)
+            row.updated_at = datetime.now(timezone.utc)
+            await db.commit()
+            await db.refresh(row)
+            return _to_dict(row)
 
     async def delete(self, contact_id: str) -> None:
-        # TODO: DELETE FROM trusted_contacts WHERE id = :contact_id
-        raise NotImplementedError("trusted_contacts table not yet migrated")
+        async with self._session_factory() as db:
+            await db.execute(delete(TrustedContact).where(TrustedContact.id == contact_id))
+            await db.commit()
+
+
+def _to_dict(row: TrustedContact) -> dict:
+    return {
+        "id": row.id,
+        "user_id": row.user_id,
+        "name": row.name,
+        "phone_number": row.phone_number,
+        "channel": row.channel,
+        "created_at": row.created_at,
+    }

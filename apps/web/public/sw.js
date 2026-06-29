@@ -4,8 +4,18 @@
  * Critical: never cache SOS API calls — they must always go to the network.
  */
 
-const CACHE_NAME = 'abhaya-v1';
-const STATIC_ASSETS = ['/', '/sos/active', '/evidence', '/safe-places', '/settings'];
+const CACHE_NAME = 'abhaya-v2';
+const STATIC_ASSETS = [
+  '/',
+  '/sos/active',
+  '/sos/history',
+  '/witness/alert',
+  '/evidence',
+  '/safe-places',
+  '/contacts',
+  '/trip',
+  '/settings',
+];
 
 // ── Install: pre-cache shell routes ──────────────────────────────────────────
 
@@ -83,7 +93,10 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     self.clients.matchAll({ type: 'window' }).then((clients) => {
       const existing = clients.find((c) => c.url.includes(self.location.origin));
-      if (existing) return existing.focus();
+      if (existing) {
+        if ('navigate' in existing) return existing.navigate(target).then((client) => client.focus());
+        return existing.focus();
+      }
       return self.clients.openWindow(target);
     }),
   );

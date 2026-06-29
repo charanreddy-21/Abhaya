@@ -27,8 +27,25 @@ export function enqueuePendingSOS(payload: CreateSOSPayload): void {
 export function getPendingSOS(): PendingSOS | null {
   try {
     const raw = localStorage.getItem(QUEUE_KEY);
-    return raw ? (JSON.parse(raw) as PendingSOS) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PendingSOS>;
+    if (
+      !parsed.payload ||
+      typeof parsed.payload.lat !== 'number' ||
+      typeof parsed.payload.lng !== 'number' ||
+      Number.isNaN(parsed.payload.lat) ||
+      Number.isNaN(parsed.payload.lng)
+    ) {
+      clearPendingSOS();
+      return null;
+    }
+    return {
+      payload: parsed.payload,
+      queuedAt: parsed.queuedAt ?? new Date().toISOString(),
+      attempts: parsed.attempts ?? 0,
+    };
   } catch {
+    clearPendingSOS();
     return null;
   }
 }
@@ -46,7 +63,11 @@ export function clearPendingSOS(): void {
   } catch { /* noop */ }
 }
 
-export function isPendingSOSStale(entry: PendingSOS, maxAgeMinutes = 30): boolean {
+export function isPendingSOSStale(entry: PendingSOS, maxAgeMinutes = 10): boolean {
   const queued = new Date(entry.queuedAt).getTime();
-  return Date.now() - queued > maxAgeMinutes * 60 * 1000;
+  const captured = entry.payload.location_captured_at
+    ? new Date(entry.payload.location_captured_at).getTime()
+    : queued;
+  if (Number.isNaN(queued) || Number.isNaN(captured)) return true;
+  return Date.now() - Math.min(queued, captured) > maxAgeMinutes * 60 * 1000;
 }

@@ -20,10 +20,16 @@ from .schemas import (
     ContactUpdate,
     EchoDispatchResult,
 )
+from apps.server.app.core.config import settings
+from apps.server.app.shared.errors import (
+    contact_already_exists,
+    contact_not_found,
+    contacts_limit_reached,
+    forbidden,
+)
 
 logger = logging.getLogger(__name__)
 
-MAX_CONTACTS_PER_USER = 5
 _MASK_RE = re.compile(r"(\+?\d{2,4})\d+(\d{4})")
 
 
@@ -60,19 +66,10 @@ class TrustedContactsService:
 
     async def add_contact(self, user_id: str, payload: ContactCreate) -> ContactResponse:
         existing = await self._repo.list_for_user(user_id)
-        if len(existing) >= MAX_CONTACTS_PER_USER:
-            from fastapi import HTTPException, status
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail={
-                    "error": {
-                        "code": "CONTACTS_LIMIT_REACHED",
-                        "message": f"You can have up to {MAX_CONTACTS_PER_USER} trusted contacts.",
-                        "details": {},
-                        "request-id": "",
-                    }
-                },
-            )
+        if len(existing) >= settings.max_trusted_contacts_per_user:
+            raise contacts_limit_reached(settings.max_trusted_contacts_per_user)
+        if any(c["phone_number"] == payload.phone_number for c in existing):
+            raise contact_already_exists()
         row = await self._repo.create(
             user_id=user_id,
             name=payload.name,
@@ -206,32 +203,11 @@ class TrustedContactsService:
             )
 
     async def _get_owned_contact(self, contact_id: str, user_id: str) -> dict:
-        from fastapi import HTTPException, status
         contact = await self._repo.get_by_id(contact_id)
         if not contact:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error": {
-                        "code": "CONTACT_NOT_FOUND",
-                        "message": "We couldn't find that contact.",
-                        "details": {},
-                        "request-id": "",
-                    }
-                },
-            )
+            raise contact_not_found()
         if contact["user_id"] != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={
-                    "error": {
-                        "code": "AUTH_FORBIDDEN",
-                        "message": "You do not have permission to do that.",
-                        "details": {},
-                        "request-id": "",
-                    }
-                },
-            )
+            raise forbidden("this contact")
         return contact
 
     def _to_response(self, row: dict) -> ContactResponse:

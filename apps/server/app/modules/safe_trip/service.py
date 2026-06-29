@@ -27,10 +27,51 @@ import logging
 
 from .repository import SafeTripRepository, PING_GRACE_SECONDS
 from .schemas import TripCreate, TripExtend, TripResponse
+from apps.server.app.modules.sos.schemas import CreateSOSRequest
+from apps.server.app.modules.sos.service import SOSService
+from apps.server.app.shared.errors import (
+    forbidden,
+    trip_already_active,
+    trip_already_terminal,
+    trip_escalated_cannot_cancel,
+    trip_not_found,
+)
 
 logger = logging.getLogger(__name__)
 
 ALLOWED_TERMINAL_STATUSES = {"resolved", "cancelled", "escalated"}
+
+
+class SafeTripSOSAdapter:
+    def __init__(self, session_factory):
+        self._session_factory = session_factory
+
+    async def create_silent(
+        self,
+        user_id: str,
+        source: str,
+        latitude: Optional[float],
+        longitude: Optional[float],
+        context: dict,
+    ) -> dict:
+        if latitude is None or longitude is None:
+            logger.warning(
+                "trip_silent_sos_skipped_no_location",
+                extra={"user_id": user_id, "source": source, "trip_id": context.get("trip_id")},
+            )
+            return {}
+
+        async with self._session_factory() as db:
+            incident = await SOSService(db).create(
+                user_id,
+                CreateSOSRequest(
+                    lat=latitude,
+                    lng=longitude,
+                    accuracy_meters=999.0,
+                    location_captured_at=datetime.now(timezone.utc),
+                ),
+            )
+            return {"id": incident.id}
 
 
 class SafeTripService:
@@ -54,18 +95,7 @@ class SafeTripService:
     async def create_trip(self, user_id: str, payload: TripCreate) -> TripResponse:
         existing = await self._repo.get_active_for_user(user_id)
         if existing and existing["status"] not in ALLOWED_TERMINAL_STATUSES:
-            from fastapi import HTTPException, status
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={
-                    "error": {
-                        "code": "TRIP_ALREADY_ACTIVE",
-                        "message": "You already have an active Safe Trip. Check in or cancel it first.",
-                        "details": {"existing_trip_id": existing["id"]},
-                        "request-id": "",
-                    }
-                },
-            )
+            raise trip_already_active(existing["id"])
 
         row = await self._repo.create(
             user_id=user_id,
@@ -105,18 +135,7 @@ class SafeTripService:
         self._assert_not_terminal(trip)
 
         if trip["status"] == "escalated":
-            from fastapi import HTTPException, status
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={
-                    "error": {
-                        "code": "TRIP_ALREADY_ESCALATED",
-                        "message": "This trip has already triggered a safety alert. You cannot extend it.",
-                        "details": {},
-                        "request-id": "",
-                    }
-                },
-            )
+            raise trip_escalated_cannot_cancel(trip.get("incident_id"))
 
         current_eta = trip["expected_arrival_at"]
         if current_eta.tzinfo is None:
@@ -142,18 +161,7 @@ class SafeTripService:
     async def cancel(self, trip_id: str, user_id: str) -> TripResponse:
         trip = await self._get_owned_trip(trip_id, user_id)
         if trip["status"] == "escalated":
-            from fastapi import HTTPException, status
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={
-                    "error": {
-                        "code": "TRIP_ESCALATED_CANNOT_CANCEL",
-                        "message": "A safety alert is active. Use the SOS screen to resolve it.",
-                        "details": {"incident_id": trip.get("incident_id")},
-                        "request-id": "",
-                    }
-                },
-            )
+            raise trip_escalated_cannot_cancel(trip.get("incident_id"))
         if trip["status"] in ALLOWED_TERMINAL_STATUSES:
             # Idempotent — already done
             return TripResponse(**trip)
@@ -211,50 +219,16 @@ class SafeTripService:
     # ------------------------------------------------------------------ #
 
     async def _get_owned_trip(self, trip_id: str, user_id: str) -> dict:
-        from fastapi import HTTPException, status
-
         trip = await self._repo.get_by_id(trip_id)
         if not trip:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error": {
-                        "code": "TRIP_NOT_FOUND",
-                        "message": "We couldn't find that trip.",
-                        "details": {},
-                        "request-id": "",
-                    }
-                },
-            )
+            raise trip_not_found()
         if trip["user_id"] != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={
-                    "error": {
-                        "code": "AUTH_FORBIDDEN",
-                        "message": "You do not have permission to do that.",
-                        "details": {},
-                        "request-id": "",
-                    }
-                },
-            )
+            raise forbidden("this trip")
         return trip
 
     def _assert_not_terminal(self, trip: dict) -> None:
-        from fastapi import HTTPException, status
-
         if trip["status"] in ALLOWED_TERMINAL_STATUSES:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={
-                    "error": {
-                        "code": "TRIP_ALREADY_TERMINAL",
-                        "message": "This trip has already ended.",
-                        "details": {"status": trip["status"]},
-                        "request-id": "",
-                    }
-                },
-            )
+            raise trip_already_terminal(trip["status"])
 
     async def _send_safety_ping(self, trip: dict) -> None:
         """

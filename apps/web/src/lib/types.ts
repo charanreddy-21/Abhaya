@@ -48,6 +48,7 @@ export interface CreateSOSPayload {
   lat: number;
   lng: number;
   accuracy_meters?: number;
+  location_captured_at?: string;
 }
 
 // ── Witness Alerts ─────────────────────────────────────────────────────────────

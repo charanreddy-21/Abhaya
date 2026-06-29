@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +10,8 @@ from apps.server.app.modules.witness_alerts.service import WitnessAlertService
 from apps.server.app.shared.errors import (
     forbidden,
     sos_already_resolved,
+    sos_location_poor_accuracy,
+    sos_location_stale,
     sos_not_found,
     sos_rate_limit,
 )
@@ -41,6 +43,20 @@ class SOSService:
         self._db = db
 
     async def create(self, user_id: str, req: CreateSOSRequest) -> IncidentOut:
+        active = await self._repo.get_active_for_user(user_id)
+        if active:
+            return _to_out(active[0])
+
+        if req.location_captured_at:
+            captured_at = req.location_captured_at
+            if captured_at.tzinfo is None:
+                captured_at = captured_at.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) - captured_at > timedelta(minutes=settings.max_sos_location_age_minutes):
+                raise sos_location_stale()
+
+        if req.accuracy_meters > settings.max_sos_accuracy_meters:
+            raise sos_location_poor_accuracy()
+
         recent_count = await self._repo.count_recent(user_id, window_seconds=3600)
         if recent_count >= settings.max_sos_per_hour:
             raise sos_rate_limit()

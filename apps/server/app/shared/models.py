@@ -116,6 +116,35 @@ class SafePlace(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
 
 
+class TrustedContact(Base):
+    __tablename__ = "trusted_contacts"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String(32), ForeignKey("users.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    phone_number: Mapped[str] = mapped_column(String(32), nullable=False)
+    channel: Mapped[str] = mapped_column(String(16), nullable=False, default="whatsapp")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
+
+
+class TripMonitor(Base):
+    __tablename__ = "trip_monitors"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String(32), ForeignKey("users.id"), nullable=False, index=True)
+    destination_label: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="active", index=True)
+    expected_arrival_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ping_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ping_deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    incident_id: Mapped[str | None] = mapped_column(String(32), ForeignKey("incidents.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
 

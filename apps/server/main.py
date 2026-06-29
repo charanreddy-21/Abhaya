@@ -1,9 +1,10 @@
 """Abhaya FastAPI application entry point."""
 
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
-from fastapi.exceptions import HTTPException
+from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -20,6 +21,7 @@ from apps.server.app.shared.errors import (
     AbhayaError,
     abhaya_error_handler,
     http_exception_handler,
+    validation_exception_handler,
 )
 from apps.server.app.modules.safe_trip.router import router as trip_router
 from apps.server.app.modules.trusted_contacts.router import router as contacts_router
@@ -33,19 +35,29 @@ async def lifespan(application: FastAPI):
     # Repositories receive a session_factory, NOT an open session,
     # so each repo method opens its own connection per request.
     from apps.server.app.modules.safe_trip.service import SafeTripService
+    from apps.server.app.modules.safe_trip.service import SafeTripSOSAdapter
     from apps.server.app.modules.safe_trip.repository import SafeTripRepository
     from apps.server.app.modules.trusted_contacts.service import TrustedContactsService
     from apps.server.app.modules.trusted_contacts.repository import TrustedContactsRepository
 
-    application.state.safe_trip_service = SafeTripService(
-        repo=SafeTripRepository(session_factory=SessionLocal),
-    )
     application.state.trusted_contacts_service = TrustedContactsService(
         repo=TrustedContactsRepository(session_factory=SessionLocal),
     )
+    application.state.safe_trip_service = SafeTripService(
+        repo=SafeTripRepository(session_factory=SessionLocal),
+        sos_service=SafeTripSOSAdapter(SessionLocal),
+        echo_service=application.state.trusted_contacts_service,
+    )
+
+    scheduler_task = asyncio.create_task(_safe_trip_scheduler(application))
 
     await _seed_if_empty()
-    yield
+    try:
+        yield
+    finally:
+        scheduler_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await scheduler_task
 
 
 app = FastAPI(
@@ -66,6 +78,7 @@ app.add_middleware(
 
 app.add_exception_handler(AbhayaError, abhaya_error_handler)
 app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
 
 app.include_router(auth_router)
 app.include_router(sos_router)
@@ -77,6 +90,19 @@ app.include_router(notifications_router)
 # Routers already define their own prefix — do NOT pass prefix= here.
 app.include_router(trip_router)
 app.include_router(contacts_router)
+
+
+async def _safe_trip_scheduler(application: FastAPI) -> None:
+    """Small prototype scheduler for Safe Trip ping/escalation transitions."""
+    while True:
+        await asyncio.sleep(30)
+        try:
+            service = application.state.safe_trip_service
+            await service.check_due_pings()
+            await service.check_due_escalations()
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("safe_trip_scheduler_failed")
 
 
 # ── Health ──────────────────────────────────────────────────────────────────

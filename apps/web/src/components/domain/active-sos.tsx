@@ -20,6 +20,7 @@ import {
   enqueuePendingSOS,
   getPendingSOS,
   clearPendingSOS,
+  incrementAttempts,
   isPendingSOSStale,
 } from '@/lib/offline-queue';
 import type { Incident, WitnessAlert } from '@/lib/types';
@@ -37,6 +38,7 @@ export function ActiveSOSView() {
   const [resolving, setResolving]   = useState(false);
   const [error, setError]           = useState<string | null>(null);
   const [phase, setPhase]           = useState<'idle' | 'arming' | 'pending' | 'active' | 'resolved'>('idle');
+  const [retryNonce, setRetryNonce] = useState(0);
 
   const retryRef = useRef(false);
   const elapsed  = useElapsedSeconds(incident?.created_at ?? null);
@@ -45,12 +47,27 @@ export function ActiveSOSView() {
     if (!isAuthenticated) router.push('/auth/login');
   }, [isAuthenticated, router]);
 
+  // Resume an active incident if the user refreshes or opens this page again.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    sosApi.getActive()
+      .then((active) => {
+        if (active.length > 0) {
+          setIncident(active[0]);
+          setPhase('active');
+          setError(null);
+        }
+      })
+      .catch(() => { /* non-fatal; the primary action can still create or queue */ });
+  }, [isAuthenticated]);
+
   // On mount: check for a stale pending SOS from a previous session
   useEffect(() => {
     const pending = getPendingSOS();
     if (!pending) return;
     if (isPendingSOSStale(pending)) {
       clearPendingSOS();
+      setError('Queued SOS expired because the location was too old. Please start again with a fresh location.');
       return;
     }
     setPhase('pending');
@@ -62,9 +79,17 @@ export function ActiveSOSView() {
     if (!isOnline || phase !== 'pending' || retryRef.current) return;
     const pending = getPendingSOS();
     if (!pending) { setPhase('idle'); setError(null); return; }
+    if (isPendingSOSStale(pending)) {
+      clearPendingSOS();
+      retryRef.current = false;
+      setPhase('idle');
+      setError('Queued SOS expired because the location was too old. Please start again with a fresh location.');
+      return;
+    }
 
     retryRef.current = true;
     setCreating(true);
+    incrementAttempts(pending);
     sosApi.create(pending.payload)
       .then((inc) => {
         clearPendingSOS();
@@ -75,12 +100,21 @@ export function ActiveSOSView() {
       })
       .catch((err) => {
         const msg = err instanceof AbhayaApiError ? err.message
-          : 'Retry failed. Keep this screen open — Abhaya will try again.';
+          : 'Retry failed. Keep this screen open. Abhaya will try again.';
         setError(msg);
-        retryRef.current = false;
+        if (err instanceof AbhayaApiError && ['SOS_LOCATION_STALE', 'SOS_LOCATION_POOR_ACCURACY'].includes(err.code)) {
+          clearPendingSOS();
+          setPhase('idle');
+          retryRef.current = false;
+          return;
+        }
+        window.setTimeout(() => {
+          retryRef.current = false;
+          setRetryNonce((n) => n + 1);
+        }, Math.min(30_000, 5_000 * Math.max(1, pending.attempts + 1)));
       })
       .finally(() => setCreating(false));
-  }, [isOnline, phase, toast]);
+  }, [isOnline, phase, retryNonce, toast]);
 
   // Poll witnesses while active
   useEffect(() => {
@@ -108,10 +142,27 @@ export function ActiveSOSView() {
     setCreating(true);
     setError(null);
 
+    if (!geo.position) {
+      const msg = geolocationMessage(geo.error);
+      setError(msg);
+      setCreating(false);
+      toast(msg, 'warn', 7000);
+      return;
+    }
+
+    if (geo.position.accuracy > 5_000) {
+      const msg = 'Your GPS accuracy is too weak for nearby alerts. Move near an open area and try again.';
+      setError(msg);
+      setCreating(false);
+      toast(msg, 'warn', 7000);
+      return;
+    }
+
     const payload = {
-      lat:             geo.position?.latitude  ?? 12.9352,
-      lng:             geo.position?.longitude ?? 77.6245,
-      accuracy_meters: geo.position?.accuracy  ?? 999,
+      lat:                  geo.position.latitude,
+      lng:                  geo.position.longitude,
+      accuracy_meters:      geo.position.accuracy,
+      location_captured_at: new Date().toISOString(),
     };
 
     try {
@@ -136,6 +187,22 @@ export function ActiveSOSView() {
       setCreating(false);
     }
   }, [phase, geo, toast]);
+
+  function geolocationMessage(error: GeolocationPositionError | null): string {
+    if (!('geolocation' in navigator)) {
+      return 'This browser does not support location. Use another device or call 112 in a life-threatening emergency.';
+    }
+    if (!error) {
+      return 'We are still getting your location. Keep this screen open and try again in a moment.';
+    }
+    if (error.code === error.PERMISSION_DENIED) {
+      return 'Location is blocked. Enable location permission so Abhaya can alert nearby opted-in users.';
+    }
+    if (error.code === error.TIMEOUT) {
+      return 'Location took too long. Move near an open area and try again.';
+    }
+    return 'We could not get your location. Move near an open area and try again.';
+  }
 
   async function resolveIncident() {
     if (!incident) return;

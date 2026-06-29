@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
 
 
 class Settings(BaseSettings):
@@ -22,10 +23,20 @@ class Settings(BaseSettings):
     # Safety
     witness_alert_radius_meters: float = 500.0
     max_sos_per_hour: int = 3
+    max_sos_location_age_minutes: int = 10
+    max_sos_accuracy_meters: float = 5_000.0
     max_evidence_per_incident: int = 10
+    max_trusted_contacts_per_user: int = 5
 
     # CORS
     cors_origins: list[str] = ["http://localhost:3000"]
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, value):
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
 
 
 settings = Settings()

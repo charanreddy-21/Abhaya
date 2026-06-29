@@ -5,10 +5,12 @@ from sqlalchemy.orm import DeclarativeBase
 
 from apps.server.app.core.config import settings
 
+connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
+
 engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
-    connect_args={"check_same_thread": False},
+    connect_args=connect_args,
 )
 
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)

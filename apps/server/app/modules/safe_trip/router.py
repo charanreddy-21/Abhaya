@@ -18,6 +18,7 @@ path when a prefix is defined on the router.
 
 from fastapi import APIRouter, Depends, Request
 
+from apps.server.app.core.security import get_current_user
 from .schemas import TripCreate, TripExtend, TripResponse, TripListResponse
 from .service import SafeTripService   # plain runtime import — no TYPE_CHECKING guard
 
@@ -28,40 +29,23 @@ def _get_service(request: Request) -> SafeTripService:
     return request.app.state.safe_trip_service
 
 
-def _current_user_id(request: Request) -> str:
-    user = getattr(request.state, "user", None)
-    if user is None:
-        from fastapi import HTTPException, status
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={
-                "error": {
-                    "code": "AUTH_SESSION_EXPIRED",
-                    "message": "Your session expired. Please sign in again.",
-                    "details": {},
-                    "request-id": "",
-                }
-            },
-        )
-    return user["id"]
-
-
 @router.post("/", response_model=TripResponse, status_code=201)
 async def create_trip(
     payload: TripCreate,
     request: Request,
+    user=Depends(get_current_user),
     service: SafeTripService = Depends(_get_service),
 ):
-    return await service.create_trip(user_id=_current_user_id(request), payload=payload)
+    return await service.create_trip(user_id=user.id, payload=payload)
 
 
 @router.get("/", response_model=TripListResponse)
 async def list_trips(
     request: Request,
+    user=Depends(get_current_user),
     service: SafeTripService = Depends(_get_service),
 ):
-    user_id = _current_user_id(request)
-    trips = await service._repo.list_for_user(user_id)
+    trips = await service._repo.list_for_user(user.id)
     return TripListResponse(trips=[TripResponse(**t) for t in trips], total=len(trips))
 
 
@@ -69,10 +53,10 @@ async def list_trips(
 @router.get("/active", response_model=TripResponse | None)
 async def get_active_trip(
     request: Request,
+    user=Depends(get_current_user),
     service: SafeTripService = Depends(_get_service),
 ):
-    user_id = _current_user_id(request)
-    trip = await service._repo.get_active_for_user(user_id)
+    trip = await service._repo.get_active_for_user(user.id)
     return TripResponse(**trip) if trip else None
 
 
@@ -80,18 +64,20 @@ async def get_active_trip(
 async def get_trip(
     trip_id: str,
     request: Request,
+    user=Depends(get_current_user),
     service: SafeTripService = Depends(_get_service),
 ):
-    return await service._get_owned_trip(trip_id, _current_user_id(request))
+    return await service._get_owned_trip(trip_id, user.id)
 
 
 @router.post("/{trip_id}/checkin", response_model=TripResponse)
 async def checkin(
     trip_id: str,
     request: Request,
+    user=Depends(get_current_user),
     service: SafeTripService = Depends(_get_service),
 ):
-    return await service.checkin(trip_id=trip_id, user_id=_current_user_id(request))
+    return await service.checkin(trip_id=trip_id, user_id=user.id)
 
 
 @router.post("/{trip_id}/extend", response_model=TripResponse)
@@ -99,10 +85,11 @@ async def extend_trip(
     trip_id: str,
     payload: TripExtend,
     request: Request,
+    user=Depends(get_current_user),
     service: SafeTripService = Depends(_get_service),
 ):
     return await service.extend(
-        trip_id=trip_id, user_id=_current_user_id(request), payload=payload
+        trip_id=trip_id, user_id=user.id, payload=payload
     )
 
 
@@ -110,6 +97,7 @@ async def extend_trip(
 async def cancel_trip(
     trip_id: str,
     request: Request,
+    user=Depends(get_current_user),
     service: SafeTripService = Depends(_get_service),
 ):
-    return await service.cancel(trip_id=trip_id, user_id=_current_user_id(request))
+    return await service.cancel(trip_id=trip_id, user_id=user.id)

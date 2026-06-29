@@ -7,6 +7,7 @@ class CreateSOSRequest(BaseModel):
     lat: float = Field(ge=-90.0, le=90.0)
     lng: float = Field(ge=-180.0, le=180.0)
     accuracy_meters: float = Field(ge=0.0, le=50_000.0, default=999.0)
+    location_captured_at: datetime | None = None
 
 
 class IncidentOut(BaseModel):

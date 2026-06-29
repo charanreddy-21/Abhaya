@@ -2,7 +2,7 @@
 
 Abhaya is a hackathon prototype for a PWA-first public safety platform for India. The target audience is the general public, with women as the primary safety persona. The product idea is simple: **safety with reason**. Abhaya should help a person trigger an SOS, alert nearby opted-in users, preserve incident evidence for future FIR support, and present calm, plain-language guidance when the system cannot guarantee something.
 
-This repository is early. The current implementation contains a FastAPI health endpoint and a placeholder Next.js command center page. The architecture below describes the intended prototype direction, not completed production behavior.
+This repository is early, but it now contains a working modular-monolith prototype. The architecture below describes the intended direction and the current implementation follows it where practical for a hackathon build.
 
 ## What Exists
 
@@ -96,6 +96,15 @@ Default local URLs:
 - Web: `http://localhost:3000`
 - API: `http://localhost:8000`
 - Health: `http://localhost:8000/api/health`
+
+Useful backend environment variables use the `ABHAYA_` prefix:
+
+- `ABHAYA_DATABASE_URL`: SQLAlchemy async database URL. Defaults to local SQLite.
+- `ABHAYA_CORS_ORIGINS`: Comma-separated allowed web origins.
+- `ABHAYA_MAX_SOS_PER_HOUR`: Per-user SOS creation limit.
+- `ABHAYA_MAX_SOS_LOCATION_AGE_MINUTES`: Maximum accepted SOS location age.
+- `ABHAYA_MAX_SOS_ACCURACY_METERS`: Maximum accepted SOS GPS accuracy radius.
+- `ABHAYA_MAX_TRUSTED_CONTACTS_PER_USER`: Trusted contact limit.
 
 ## High-Level Design
 
