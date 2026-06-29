@@ -6,8 +6,8 @@ This repository is early. The current implementation contains a FastAPI health e
 
 ## What Exists
 
-- `apps/server`: FastAPI backend with `/api/health`
-- `apps/web`: Next.js frontend placeholder dashboard
+- `apps/server`: FastAPI modular monolith with auth, SOS, witness alerts, evidence, safe places, notifications, admin, safe trip, and trusted contacts modules
+- `apps/web`: Next.js PWA with installable experience, auth-gated routes, and domain UI components
 - Root npm workspace scripts for frontend and backend development
 - Documentation for the intended HLD, LLD, engineering standards, and design system
 
@@ -113,6 +113,8 @@ flowchart TD
     API --> SafePlaces[Safe Places Module]
     API --> Notifications[Notification Module]
     API --> Audit[Audit Module]
+    API --> SafeTrip[Safe Trip Module]
+    API --> Contacts[Trusted Contacts Module]
 
     SOS --> Redis[(Redis: live incident state)]
     Witness --> PostGIS[(PostgreSQL + PostGIS)]
@@ -120,6 +122,8 @@ flowchart TD
     Evidence --> Ledger[IPFS/OpenTimestamps or hash anchor]
     Audit --> Postgres[(PostgreSQL)]
     SafePlaces --> PostGIS
+    SafeTrip --> Postgres
+    Contacts --> Postgres
     Notifications --> Push[Web Push Service]
 ```
 
@@ -302,6 +306,67 @@ Expected errors:
 - `PUSH_PERMISSION_DENIED`: "Push notifications are off. You can still use Abhaya while the app is open."
 - `NOTIFICATION_SEND_FAILED`: "Some alerts could not be delivered."
 
+### `safe-trip`
+
+Purpose: time-bound journey monitoring with automatic escalation if the user does not check in.
+
+Responsibilities:
+
+- Create a trip with a destination, estimated duration, and a set of trusted contacts to notify
+- Track check-in state and escalate if a check-in deadline is missed
+- Trigger an SMS fallback alert to trusted contacts when the server cannot be reached
+- Resolve or cancel a trip when the user arrives or manually ends it
+
+Key entities:
+
+- `safe_trips`: id, user_id, destination, started_at, expected_end_at, status, created_at
+- `trip_checkins`: id, trip_id, checked_in_at, latitude, longitude
+
+Statuses:
+
+- `active`
+- `completed`
+- `escalated`
+- `cancelled`
+
+Expected errors:
+
+- `TRIP_ALREADY_ACTIVE`: "You already have an active trip. End it before starting a new one."
+- `TRIP_NOT_FOUND`: "Trip not found or does not belong to you."
+- `TRIP_CHECKIN_LATE`: "Your check-in window passed. Contacts may have been alerted."
+
+### `trusted-contacts`
+
+Purpose: manage a personal list of people who receive Echo alerts during a safe trip or SOS escalation.
+
+Responsibilities:
+
+- Store up to a configurable limit of trusted contacts per user
+- Send SMS-based Echo alerts when push delivery is unavailable
+- Provide the user full control to add, edit, and remove contacts
+
+Key entities:
+
+- `trusted_contacts`: id, user_id, name, phone, relationship, created_at
+
+Expected errors:
+
+- `CONTACT_LIMIT_REACHED`: "You can add up to [n] trusted contacts."
+- `CONTACT_NOT_FOUND`: "Contact not found or does not belong to you."
+- `CONTACT_DUPLICATE_PHONE`: "A contact with this number already exists."
+
+### `sms-fallback`
+
+Purpose: ensure alerts reach trusted contacts even when push notifications or the server are unavailable.
+
+Responsibilities:
+
+- Build a pre-formatted SMS body with location, timestamp, and Abhaya branding
+- Open the device native SMS composer via a `sms:` URI so no server round-trip is required
+- Used by both the active SOS surface and safe trip escalation flows
+
+This is a client-side utility only — no backend module. See `apps/web/src/components/domain/sms-fallback.tsx`.
+
 ### `admin-command-center`
 
 Purpose: allow admins to inspect active incidents and system status.
@@ -340,6 +405,15 @@ POST   /api/evidence
 GET    /api/admin/incidents
 GET    /api/admin/incidents/{incident_id}
 POST   /api/admin/safe-places/{safe_place_id}/verify
+POST   /api/trip
+GET    /api/trip/{trip_id}
+POST   /api/trip/{trip_id}/checkin
+POST   /api/trip/{trip_id}/complete
+POST   /api/trip/{trip_id}/cancel
+GET    /api/contacts
+POST   /api/contacts
+PUT    /api/contacts/{contact_id}
+DELETE /api/contacts/{contact_id}
 ```
 
 API payload naming should use dash-case for external field names if that remains a project decision. Internally, Python should use snake_case and TypeScript should use camelCase. Use explicit mapping at API boundaries so internal code stays idiomatic.
@@ -404,11 +478,13 @@ Compliance posture:
 
 Recommended v1 pages:
 
-- `/`: calm home/status surface with SOS action
+- `/`: calm home/status surface with SOS action and quick links to all features
 - `/sos/active`: active SOS state, evidence capture, alert delivery status
 - `/witness/alert`: nearby alert detail for opted-in witnesses
 - `/evidence`: user evidence vault and deletion controls
 - `/safe-places`: nearby public places and verification status
+- `/trip`: start and monitor a time-bound safe trip with trusted contact escalation
+- `/contacts`: manage trusted contacts for Echo SMS alerts
 - `/admin`: command center overview
 - `/admin/incidents/[id]`: incident detail and audit trail
 - `/settings`: profile, witness opt-in, permissions, privacy controls
@@ -464,6 +540,14 @@ Milestone 5: Command center
 - Safe-place verification
 - Audit log surface
 
+Milestone 6: Safe trip and trusted contacts
+
+- Trusted contacts CRUD
+- Time-bound trip creation and check-in
+- Automatic escalation on missed check-in
+- SMS fallback composer for offline Echo alerts
+- Safe trip and contacts quick links on safety home
+
 ## Known Hard Problems
 
 - PWAs cannot guarantee background shake detection or background recording on every device.
@@ -481,6 +565,10 @@ Milestone 5: Command center
 - Evidence item: encrypted media or metadata attached to an incident.
 - Integrity anchor: a hash record used to show evidence was not modified after capture.
 - Command center: admin view for active incidents, safe places, and audit trails.
+- Safe trip: a time-bound journey with a check-in deadline and automatic escalation to trusted contacts if missed.
+- Trusted contact: a person stored by the user who receives Echo SMS alerts during a safe trip or SOS escalation.
+- Echo alert: an SMS sent to trusted contacts when push notification delivery is unavailable or the server cannot be reached.
+- SMS fallback: a client-side mechanism that opens the device native SMS composer with a pre-built alert body, requiring no server round-trip.
 
 ## Related Docs
 
