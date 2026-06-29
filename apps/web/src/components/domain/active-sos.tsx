@@ -15,6 +15,7 @@ import { AbhayaApiError, NetworkError } from '@/lib/api-client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Panel } from '@/components/ui/panel';
+import SmsFallback from './sms-fallback';
 import {
   enqueuePendingSOS,
   getPendingSOS,
@@ -287,25 +288,17 @@ function SOSPrimaryAction({ phase, creating, resolving, error, onAction, onResol
 }) {
   return (
     <div className="sos-action-panel">
-      {error && (
-        <div className="sos-error-notice">
-          <WifiOff size={14} />
-          {error}
-        </div>
-      )}
-
+      {/* Remove the old error notice, SmsFallback handles it now */}
+      
       {phase === 'pending' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <button
-            className="sos-button is-arming"
-            disabled
-            type="button"
-            aria-live="polite"
-          >
-            <Loader2 size={28} className="spin" />
-            <span>Waiting for network…</span>
-            <small>SOS will send automatically when connected</small>
-          </button>
+          {/* REPLACE THE WAITING BUTTON WITH THE SMS FALLBACK */}
+          <SmsFallback 
+             apiError={{ error: { code: 'NETWORK_ERROR' } }} 
+             onRetry={onAction} 
+             retrying={creating} 
+          />
+          
           <button
             className="btn btn-ghost btn-sm"
             onClick={onCancelPending}
