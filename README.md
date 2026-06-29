@@ -1,585 +1,541 @@
 # Abhaya
 
-Abhaya is a hackathon prototype for a PWA-first public safety platform for India. The target audience is the general public, with women as the primary safety persona. The product idea is simple: **safety with reason**. Abhaya should help a person trigger an SOS, alert nearby opted-in users, preserve incident evidence for future FIR support, and present calm, plain-language guidance when the system cannot guarantee something.
+Abhaya is a hackathon prototype for a PWA-first public safety companion for India. It is built for the general public, with women as the primary safety persona. The product principle is simple: safety with reason.
 
-This repository is early, but it now contains a working modular-monolith prototype. The architecture below describes the intended direction and the current implementation follows it where practical for a hackathon build.
+Abhaya helps a user start an SOS, alert nearby opted-in witnesses, preserve evidence metadata, manage trusted contacts, and run time-bound Safe Trip check-ins. It does not guarantee physical safety, police dispatch, legal admissibility, perfect routing, or notification delivery.
 
-## What Exists
+## Problem
 
-- `apps/server`: FastAPI modular monolith with auth, SOS, witness alerts, evidence, safe places, notifications, admin, safe trip, and trusted contacts modules
-- `apps/web`: Next.js PWA with installable experience, auth-gated routes, and domain UI components
-- Root npm workspace scripts for frontend and backend development
-- Documentation for the intended HLD, LLD, engineering standards, and design system
+Public safety tools often fail in the exact moments they are needed most: weak network, denied permissions, poor GPS, panic, or unavailable contacts. Many products also overclaim what software can guarantee, which is dangerous in a safety-critical context.
 
-## Planned Prototype Scope
+Abhaya focuses on a narrower promise:
 
-Abhaya should be built as a modular monolith first. Every module should be isolated enough to extract later, but the hackathon version should optimize for speed, clarity, and a believable end-to-end demo.
+| Need | Product response |
+| --- | --- |
+| Start help quickly | SOS flow with location validation and offline queue support |
+| Avoid surveillance patterns | Witness opt-in, anonymized alerts, no live responder tracking |
+| Preserve useful records | Evidence hash checks, metadata, audit events, and integrity support |
+| Handle daily travel anxiety | Safe Trip timer with check-in and trusted-contact escalation |
+| Explain failure honestly | Plain-language error messages and visible degraded states |
 
-Planned v1 capabilities:
+## Impact
 
-- Email-based user accounts
-- Two roles only: `user` and `admin`
-- PWA-first frontend with installable experience
-- SOS trigger from the PWA
-- Nearby opted-in witness alerts
-- Anonymous witness mode until a witness chooses to reveal themself
-- Temporary incident location sharing with privacy limits
-- Automatic evidence capture where browser capabilities allow it
-- Client-side hashing and encryption before evidence upload
-- Evidence integrity support for future FIR workflows
-- Admin command center for active incidents and audit review
-- Maps for incident location and safe-place context
-- Push notifications where browser support and permissions allow them
-- Plain-language error states for offline, denied permissions, poor GPS, and failed uploads
+Abhaya is designed to support safer decision-making without pretending to replace emergency services.
 
-Non-goals for the prototype:
+| Audience | Impact |
+| --- | --- |
+| User in distress | Can trigger an SOS, see system state, and keep evidence records attached to an incident |
+| Nearby opted-in witness | Can receive an approximate-area alert without exposing their identity by default |
+| Trusted contact | Can receive an Echo-style alert when configured escalation starts |
+| Admin or demo operator | Can inspect active incidents, audit activity, users, evidence metadata, and safe places |
+| Hackathon reviewer | Can see an end-to-end modular monolith with realistic failure handling |
+
+## Solution
+
+The prototype combines a Next.js installable PWA with a FastAPI modular monolith.
+
+Core capabilities implemented in the current codebase:
+
+| Area | Current status |
+| --- | --- |
+| Authentication | Email/password registration and login with Bearer tokens |
+| SOS | Create, resume, resolve, rate-limit, and validate location quality |
+| Witness alerts | Opt-in witness alerts with anonymous defaults |
+| Evidence | Upload evidence with SHA-256 hash validation and metadata responses |
+| Safe places | List, create, verify, and manage public safety locations |
+| Trusted contacts | CRUD with masked phone numbers and duplicate/limit validation |
+| Safe Trip | Create, extend, check in, cancel, scheduler-based escalation |
+| Admin | Metrics, incident detail, users, audit log, safe-place management |
+| PWA | Manifest, service worker, install prompt, cached shell routes |
+| Tests | Backend integration tests for safety-critical API paths |
+
+Non-goals:
 
 - Guaranteed police dispatch
 - Guaranteed physical safety
-- Guaranteed legal admissibility
-- Covert surveillance
-- Background recording that browsers/PWAs cannot reliably support
-- Storing permanent location history
+- Guaranteed legal admissibility of evidence
+- Covert recording or surveillance
+- Permanent location history
+- Guaranteed notification delivery on every browser or network
 
-## Repository Layout
+## Architecture
 
-```text
-.
-+-- apps
-|   +-- server
-|   |   +-- main.py
-|   |   +-- requirements.txt
-|   +-- web
-|       +-- package.json
-|       +-- src/app/page.tsx
-+-- AGENTS.md
-+-- DESIGN_SYSTEM.md
-+-- README.md
-+-- package.json
-```
-
-## Local Setup
-
-Prerequisites:
-
-- Node.js 20+
-- npm
-- Python 3.11+
-- Python virtual environment support
-
-Backend:
-
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r apps/server/requirements.txt
-npm run dev:server
-```
-
-Frontend:
-
-```bash
-cd apps/web
-npm install
-npm run dev
-```
-
-Or from the repository root:
-
-```bash
-npm install
-npm run dev:web
-```
-
-Default local URLs:
-
-- Web: `http://localhost:3000`
-- API: `http://localhost:8000`
-- Health: `http://localhost:8000/api/health`
-
-Useful backend environment variables use the `ABHAYA_` prefix:
-
-- `ABHAYA_DATABASE_URL`: SQLAlchemy async database URL. Defaults to local SQLite.
-- `ABHAYA_CORS_ORIGINS`: Comma-separated allowed web origins.
-- `ABHAYA_MAX_SOS_PER_HOUR`: Per-user SOS creation limit.
-- `ABHAYA_MAX_SOS_LOCATION_AGE_MINUTES`: Maximum accepted SOS location age.
-- `ABHAYA_MAX_SOS_ACCURACY_METERS`: Maximum accepted SOS GPS accuracy radius.
-- `ABHAYA_MAX_TRUSTED_CONTACTS_PER_USER`: Trusted contact limit.
-
-## High-Level Design
-
-Abhaya should use a modular monolith with clear boundaries:
+### High-Level Design
 
 ```mermaid
 flowchart TD
-    UserPWA[Abhaya PWA] --> API[FastAPI Modular Monolith]
-    AdminWeb[Admin Command Center] --> API
+    User[User PWA] --> Web[Next.js PWA]
+    Admin[Admin User] --> Web
+    Web --> API[FastAPI Modular Monolith]
 
-    API --> Auth[Auth Module]
-    API --> SOS[SOS Module]
-    API --> Witness[Witness Alert Module]
-    API --> Evidence[Evidence Module]
-    API --> SafePlaces[Safe Places Module]
-    API --> Notifications[Notification Module]
-    API --> Audit[Audit Module]
-    API --> SafeTrip[Safe Trip Module]
-    API --> Contacts[Trusted Contacts Module]
+    API --> Auth[auth]
+    API --> SOS[sos]
+    API --> Witness[witness_alerts]
+    API --> Evidence[evidence]
+    API --> Places[safe_places]
+    API --> Contacts[trusted_contacts]
+    API --> Trip[safe_trip]
+    API --> Notifications[notifications]
+    API --> AdminModule[admin]
+    API --> Audit[audit events]
 
-    SOS --> Redis[(Redis: live incident state)]
-    Witness --> PostGIS[(PostgreSQL + PostGIS)]
-    Evidence --> ObjectStore[(S3-compatible object storage)]
-    Evidence --> Ledger[IPFS/OpenTimestamps or hash anchor]
-    Audit --> Postgres[(PostgreSQL)]
-    SafePlaces --> PostGIS
-    SafeTrip --> Postgres
-    Contacts --> Postgres
-    Notifications --> Push[Web Push Service]
+    Auth --> DB[(PostgreSQL or SQLite prototype)]
+    SOS --> DB
+    Witness --> DB
+    Evidence --> DB
+    Places --> DB
+    Contacts --> DB
+    Trip --> DB
+    Audit --> DB
+
+    Evidence -. future .-> ObjectStorage[S3-compatible encrypted object storage]
+    SOS -. future .-> Redis[Redis live state and rate limits]
+    Places -. future .-> PostGIS[PostGIS geospatial queries]
+    Evidence -. future .-> HashAnchor[OpenTimestamps or IPFS-style hash anchoring]
+    Notifications -. future .-> Push[Web Push provider]
 ```
 
-Recommended runtime split:
-
-- Next.js PWA on Vercel
-- FastAPI backend on Render
-- PostgreSQL with PostGIS for users, incidents, safe places, audit logs, and geospatial queries
-- Redis for active SOS state, short-lived presence, rate limits, and notification fanout
-- S3-compatible storage for encrypted evidence blobs
-
-## Core User Flow
+### Runtime Flow: SOS
 
 ```mermaid
 sequenceDiagram
     participant U as User PWA
     participant API as FastAPI API
-    participant DB as PostGIS
-    participant R as Redis
-    participant W as Nearby Witnesses
-    participant E as Evidence Store
+    participant DB as Database
+    participant W as Witness Module
+    participant E as Evidence Module
 
-    U->>API: Create SOS with current location
-    API->>DB: Store incident and query opted-in witnesses
-    API->>R: Cache active incident state
-    API->>W: Send anonymous nearby alert
-    U->>U: Capture evidence if permissions allow
-    U->>U: Encrypt and hash evidence
-    U->>E: Upload encrypted evidence blob
-    U->>API: Register evidence metadata and hash
-    API->>API: Anchor hash for integrity support
-    W->>API: Acknowledge or ignore alert
-    API->>U: Show plain-language status updates
+    U->>U: Request location
+    U->>API: POST /api/sos
+    API->>API: Validate freshness and accuracy
+    API->>DB: Store incident
+    API->>W: Dispatch witness alerts
+    W->>DB: Store anonymous alert rows
+    API-->>U: Incident status
+    U->>U: Hash evidence locally
+    U->>E: Upload evidence and declared hash
+    E->>E: Verify SHA-256
+    E->>DB: Store evidence metadata and audit event
+```
+
+### Runtime Flow: Safe Trip
+
+```mermaid
+sequenceDiagram
+    participant U as User PWA
+    participant API as FastAPI API
+    participant S as Safe Trip Scheduler
+    participant C as Trusted Contacts
+    participant SOS as SOS Service
+    participant DB as Database
+
+    U->>API: POST /api/trips/
+    API->>DB: Store active trip
+    S->>DB: Find trips past ETA
+    S->>DB: Move trip to pending_checkin
+    U->>API: Check in or extend
+    alt User responds
+        API->>DB: Resolve or extend trip
+    else User misses window
+        S->>SOS: Create conservative SOS if location exists
+        S->>C: Dispatch configured Echo alerts
+        S->>DB: Mark trip escalated
+    end
 ```
 
 ## Low-Level Design
 
-### `auth`
-
-Purpose: email-based authentication and role assignment.
-
-Responsibilities:
-
-- Register/login users
-- Store password hashes or delegate to a trusted auth provider
-- Issue short-lived access tokens
-- Enforce `user` and `admin` roles
-
-Key entities:
-
-- `users`: id, email, display_name, role, witness_opt_in, created_at
-- `sessions`: id, user_id, expires_at, revoked_at
-
-Expected errors:
-
-- `AUTH_INVALID_CREDENTIALS`: "The email or password is incorrect."
-- `AUTH_SESSION_EXPIRED`: "Your session expired. Please sign in again."
-- `AUTH_FORBIDDEN`: "You do not have permission to do that."
-
-### `sos`
-
-Purpose: create and manage active incidents.
-
-Responsibilities:
-
-- Create SOS incidents
-- Validate location freshness and accuracy
-- Store incident lifecycle status
-- Avoid exposing exact responder locations to the user
-- Queue retryable operations when the network is unstable
-
-Key entities:
-
-- `sos_incidents`: id, user_id, status, latitude, longitude, accuracy_meters, created_at, resolved_at
-- `incident_events`: id, incident_id, event_type, payload_json, created_at
-
-Statuses:
-
-- `active`
-- `acknowledged`
-- `resolved`
-- `cancelled`
-- `expired`
-
-Expected errors:
-
-- `SOS_LOCATION_REQUIRED`: "We need your location to send nearby alerts."
-- `SOS_LOCATION_STALE`: "Your location is too old. Try again near an open area."
-- `SOS_RATE_LIMITED`: "Too many SOS attempts. Please wait a moment."
-- `SOS_CREATE_FAILED`: "We could not start the SOS. We will keep trying."
-
-### `witness-alerts`
-
-Purpose: notify nearby opted-in users without enabling stalking or surveillance.
-
-Responsibilities:
-
-- Query opted-in users within a default 300 meter radius
-- Avoid notifying blocked users or suspicious accounts
-- Keep witnesses anonymous unless they reveal themselves
-- Rate-limit duplicate alerts
-
-Privacy rules:
-
-- Witnesses see incident area, not unnecessary personal data.
-- SOS sender does not see witness live location.
-- Witness identity is hidden unless the witness explicitly reveals it.
-- Proximity alerts are opt-in.
-
-Expected errors:
-
-- `WITNESS_NONE_AVAILABLE`: "No nearby opted-in users were found yet."
-- `WITNESS_ALERT_PARTIAL`: "Some nearby alerts could not be sent."
-
-### `evidence`
-
-Purpose: preserve incident media integrity for future FIR support.
-
-Responsibilities:
-
-- Capture audio/video where PWA permissions allow
-- Hash evidence locally with SHA-256
-- Encrypt evidence before upload
-- Store encrypted blobs in object storage
-- Store metadata, hash, and audit trail in PostgreSQL
-- Anchor hashes using IPFS/OpenTimestamps when available
-
-Key entities:
-
-- `evidence_items`: id, incident_id, owner_user_id, kind, storage_key, sha256_hash, encryption_metadata, created_at, deleted_at
-- `evidence_audit_events`: id, evidence_id, actor_user_id, action, created_at
-
-Retention:
-
-- Keep evidence temporarily by default.
-- Allow users and admins to delete evidence.
-- Deletion should leave a minimal audit event without retaining sensitive content.
-
-Expected errors:
-
-- `EVIDENCE_PERMISSION_DENIED`: "Recording permission was denied. SOS can still continue."
-- `EVIDENCE_UPLOAD_FAILED`: "Evidence upload failed. We saved the incident status and will retry if possible."
-- `EVIDENCE_ANCHOR_FAILED`: "Evidence was saved, but integrity anchoring is still pending."
-
-### `safe-places`
-
-Purpose: provide nearby context, not guaranteed safe routing.
-
-Responsibilities:
-
-- Store candidate safe places such as pharmacies, petrol pumps, hospitals, police stations, and open public venues
-- Track verification status
-- Display confidence and freshness
-
-Verification model:
-
-- `unverified`: imported or user-submitted
-- `community-confirmed`: multiple recent confirmations
-- `admin-verified`: reviewed by an admin
-
-Expected copy:
-
-- Use "nearby public place" or "verified safe place" only when verification exists.
-- Never imply the route or destination is guaranteed safe.
-
-### `notifications`
-
-Purpose: deliver timely but honest alerts.
-
-Responsibilities:
-
-- Web Push subscriptions
-- In-app active incident updates
-- Retry and failure tracking
-- Plain-language delivery state
-
-Expected errors:
-
-- `PUSH_NOT_SUPPORTED`: "This browser does not support push alerts."
-- `PUSH_PERMISSION_DENIED`: "Push notifications are off. You can still use Abhaya while the app is open."
-- `NOTIFICATION_SEND_FAILED`: "Some alerts could not be delivered."
-
-### `safe-trip`
-
-Purpose: time-bound journey monitoring with automatic escalation if the user does not check in.
-
-Responsibilities:
-
-- Create a trip with a destination, estimated duration, and a set of trusted contacts to notify
-- Track check-in state and escalate if a check-in deadline is missed
-- Trigger an SMS fallback alert to trusted contacts when the server cannot be reached
-- Resolve or cancel a trip when the user arrives or manually ends it
-
-Key entities:
-
-- `safe_trips`: id, user_id, destination, started_at, expected_end_at, status, created_at
-- `trip_checkins`: id, trip_id, checked_in_at, latitude, longitude
-
-Statuses:
-
-- `active`
-- `completed`
-- `escalated`
-- `cancelled`
-
-Expected errors:
-
-- `TRIP_ALREADY_ACTIVE`: "You already have an active trip. End it before starting a new one."
-- `TRIP_NOT_FOUND`: "Trip not found or does not belong to you."
-- `TRIP_CHECKIN_LATE`: "Your check-in window passed. Contacts may have been alerted."
-
-### `trusted-contacts`
-
-Purpose: manage a personal list of people who receive Echo alerts during a safe trip or SOS escalation.
-
-Responsibilities:
-
-- Store up to a configurable limit of trusted contacts per user
-- Send SMS-based Echo alerts when push delivery is unavailable
-- Provide the user full control to add, edit, and remove contacts
-
-Key entities:
-
-- `trusted_contacts`: id, user_id, name, phone, relationship, created_at
-
-Expected errors:
-
-- `CONTACT_LIMIT_REACHED`: "You can add up to [n] trusted contacts."
-- `CONTACT_NOT_FOUND`: "Contact not found or does not belong to you."
-- `CONTACT_DUPLICATE_PHONE`: "A contact with this number already exists."
-
-### `sms-fallback`
-
-Purpose: ensure alerts reach trusted contacts even when push notifications or the server are unavailable.
-
-Responsibilities:
-
-- Build a pre-formatted SMS body with location, timestamp, and Abhaya branding
-- Open the device native SMS composer via a `sms:` URI so no server round-trip is required
-- Used by both the active SOS surface and safe trip escalation flows
-
-This is a client-side utility only — no backend module. See `apps/web/src/components/domain/sms-fallback.tsx`.
-
-### `admin-command-center`
-
-Purpose: allow admins to inspect active incidents and system status.
-
-Responsibilities:
-
-- View active incidents
-- View evidence metadata and audit history
-- Mark safe places as verified
-- Resolve or expire incidents
-- Avoid showing sensitive data unless necessary
-
-Admin constraints:
-
-- Admin access must be audited.
-- Admins must not receive raw evidence unless explicitly needed and allowed.
-- Admin actions should be reversible where possible.
-
-## API Conventions
-
-Use resource-oriented paths under `/api`.
-
-Recommended routes:
+### Backend Layout
 
 ```text
-GET    /api/health
-POST   /api/auth/register
-POST   /api/auth/login
-POST   /api/sos
-GET    /api/sos/{incident_id}
-POST   /api/sos/{incident_id}/cancel
-POST   /api/sos/{incident_id}/resolve
-POST   /api/sos/{incident_id}/witness-ack
-POST   /api/evidence/upload-url
-POST   /api/evidence
-GET    /api/admin/incidents
-GET    /api/admin/incidents/{incident_id}
-POST   /api/admin/safe-places/{safe_place_id}/verify
-POST   /api/trip
-GET    /api/trip/{trip_id}
-POST   /api/trip/{trip_id}/checkin
-POST   /api/trip/{trip_id}/complete
-POST   /api/trip/{trip_id}/cancel
-GET    /api/contacts
-POST   /api/contacts
-PUT    /api/contacts/{contact_id}
-DELETE /api/contacts/{contact_id}
+apps/server/
++-- main.py
++-- app/
+    +-- core/
+    |   +-- config.py
+    |   +-- database.py
+    |   +-- security.py
+    +-- modules/
+    |   +-- admin/
+    |   +-- auth/
+    |   +-- evidence/
+    |   +-- notifications/
+    |   +-- safe_places/
+    |   +-- safe_trip/
+    |   +-- sos/
+    |   +-- trusted_contacts/
+    |   +-- witness_alerts/
+    +-- shared/
+        +-- errors.py
+        +-- models.py
+        +-- utils.py
 ```
 
-API payload naming should use dash-case for external field names if that remains a project decision. Internally, Python should use snake_case and TypeScript should use camelCase. Use explicit mapping at API boundaries so internal code stays idiomatic.
+### Frontend Layout
 
-Standard error shape:
+```text
+apps/web/src/
++-- app/
+|   +-- page.tsx
+|   +-- sos/
+|   +-- witness/
+|   +-- evidence/
+|   +-- safe-places/
+|   +-- trip/
+|   +-- contacts/
+|   +-- admin/
++-- components/
+|   +-- domain/
+|   +-- layout/
+|   +-- ui/
++-- lib/
++-- types/
+```
+
+### Backend Module Responsibilities
+
+| Module | Responsibility | Key tables |
+| --- | --- | --- |
+| `auth` | Registration, login, profile, role checks | `users`, `audit_events` |
+| `sos` | Incident creation, location validation, active/resolved state | `incidents`, `audit_events` |
+| `witness_alerts` | Anonymous opted-in witness alerts | `witness_alerts`, `users`, `incidents` |
+| `evidence` | Upload validation, hash verification, evidence metadata | `evidence_items`, `audit_events` |
+| `safe_places` | Public safety location CRUD and admin verification | `safe_places`, `audit_events` |
+| `trusted_contacts` | Masked contact CRUD, duplicate and limit checks | `trusted_contacts` |
+| `safe_trip` | Trip timer, check-in, extension, cancellation, escalation | `trip_monitors`, `incidents` |
+| `notifications` | Push subscription stubs for prototype | `users` |
+| `admin` | Metrics, incident detail, users, audit, safe-place admin | all relevant tables |
+
+### Data Model Summary
+
+| Table | Sensitive fields | Notes |
+| --- | --- | --- |
+| `users` | email, password hash, push endpoint | Role is limited to `user` or `admin` |
+| `incidents` | exact location, incident history | API responses use approximate coordinates |
+| `witness_alerts` | witness id, incident id | Witness identity stays hidden unless revealed |
+| `evidence_items` | hashes, metadata, storage filename | Raw storage details are not returned to the UI |
+| `safe_places` | public place coordinates | Verification level is visible |
+| `trusted_contacts` | phone number | API returns masked phone only |
+| `trip_monitors` | destination, location, escalation state | Used by scheduler for Safe Trip transitions |
+| `audit_events` | admin actions, actor ids, metadata | Must not expose secrets in details |
+
+## API Reference
+
+Current routes are under `/api`.
+
+| Area | Method | Route | Purpose |
+| --- | --- | --- | --- |
+| Health | GET | `/api/health` | Service status |
+| Auth | POST | `/api/auth/register` | Create account |
+| Auth | POST | `/api/auth/login` | Log in |
+| Auth | GET | `/api/auth/me` | Current user |
+| Auth | PATCH | `/api/auth/me` | Update profile settings |
+| SOS | POST | `/api/sos` | Create or return active SOS |
+| SOS | GET | `/api/sos/active` | List active incidents for user |
+| SOS | GET | `/api/sos/history` | List incident history |
+| SOS | GET | `/api/sos/{incident_id}` | Read owned incident |
+| SOS | POST | `/api/sos/{incident_id}/resolve` | Resolve owned incident |
+| Witness | GET | `/api/witness/alerts` | List witness alerts |
+| Witness | POST | `/api/witness/alerts/{alert_id}/acknowledge` | Acknowledge alert |
+| Witness | POST | `/api/witness/alerts/{alert_id}/reveal` | Reveal witness identity by choice |
+| Evidence | GET | `/api/evidence` | List owned evidence |
+| Evidence | POST | `/api/evidence` | Upload evidence with metadata and hash |
+| Evidence | DELETE | `/api/evidence/{id}` | Delete evidence |
+| Safe places | GET | `/api/safe-places` | List places, optionally nearby |
+| Safe places | POST | `/api/safe-places` | Submit a place |
+| Safe Trip | POST | `/api/trips/` | Start trip |
+| Safe Trip | GET | `/api/trips/` | List trips |
+| Safe Trip | GET | `/api/trips/active` | Current active or pending trip |
+| Safe Trip | GET | `/api/trips/{trip_id}` | Read owned trip |
+| Safe Trip | POST | `/api/trips/{trip_id}/checkin` | Mark safe |
+| Safe Trip | POST | `/api/trips/{trip_id}/extend` | Extend ETA |
+| Safe Trip | POST | `/api/trips/{trip_id}/cancel` | Cancel trip |
+| Contacts | GET | `/api/contacts/` | List trusted contacts |
+| Contacts | POST | `/api/contacts/` | Add trusted contact |
+| Contacts | PATCH | `/api/contacts/{contact_id}` | Update contact |
+| Contacts | DELETE | `/api/contacts/{contact_id}` | Delete contact |
+| Admin | GET | `/api/admin/metrics` | System metrics |
+| Admin | GET | `/api/admin/incidents` | Incident list |
+| Admin | GET | `/api/admin/incidents/{id}` | Incident detail |
+| Admin | GET | `/api/admin/audit` | Audit log |
+| Admin | GET | `/api/admin/users` | User list |
+
+### Error Format
+
+All expected API errors should use this shape:
 
 ```json
 {
   "error": {
-    "code": "SOS_LOCATION_REQUIRED",
-    "message": "We need your location to send nearby alerts.",
+    "code": "SOS_LOCATION_STALE",
+    "message": "Your location is too old. Try again near an open area.",
     "details": {},
+    "request_id": "req_123",
     "request-id": "req_123"
   }
 }
 ```
 
-## Robustness Rules
+Both `request_id` and `request-id` are returned for compatibility while the API settles.
 
-Abhaya must be honest under failure.
+## Safety And Privacy Rules
 
-- Backend offline: show "Abhaya cannot reach the server right now. Keep emergency contacts available and try again."
-- Geolocation denied: show "Location is off. Turn it on so nearby alerts can be sent."
-- Poor GPS accuracy: show "Your location looks imprecise. Move near a window or open area if you can."
-- Weak network: create a local pending SOS and retry when possible.
-- Evidence permission denied: continue SOS without recording.
-- Evidence upload failed: keep encrypted local metadata where possible and retry.
-- Push unsupported: use in-app updates and explain the limitation.
+| Rule | Current implementation direction |
+| --- | --- |
+| Do not overclaim safety | UI copy says "helps", "supports", and "can" rather than "guarantees" |
+| Keep location temporary | Incidents store location for workflow needs; API returns approximate coordinates |
+| Avoid surveillance | Witnesses opt in; sender does not see witness live location |
+| Protect contacts | Trusted contact phone numbers are masked in API responses |
+| Validate SOS location | Stale and poor-accuracy locations are rejected |
+| Rate limit critical flows | Auth, SOS, safe-place submissions, and evidence limits are present |
+| Audit sensitive operations | Auth, SOS, evidence, safe-place admin, and admin access use audit events |
+| Plain-language errors | Backend returns stable codes with calm user-facing messages |
 
-Implementation expectations:
+## Setup
 
-- Validate all inputs on client and server.
-- Prefer idempotent incident and evidence operations.
-- Use request IDs for logs and user support.
-- Return plain-language messages to users.
-- Log technical details server-side only.
-- Never expose stack traces or storage keys to the frontend.
+### Prerequisites
 
-## Privacy And Abuse Prevention
+| Tool | Version |
+| --- | --- |
+| Node.js | 20 or newer |
+| npm | Bundled with Node |
+| Python | 3.11 or newer |
+| SQLite | Built into Python for local prototype |
 
-Abhaya should be designed as an anti-surveillance product.
+### Install
 
-Required protections:
+```powershell
+npm install
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r apps/server/requirements.txt
+```
 
-- Witness opt-in by default off until consent is captured.
-- Temporary location storage only.
-- Coarse incident area for witnesses unless exact location is necessary.
-- No live responder tracking for SOS senders.
-- Rate limits on SOS creation, witness acknowledgements, and evidence uploads.
-- Abuse scoring for repeated false incidents.
-- Cooldowns for newly created accounts before they can receive sensitive proximity data.
-- Block/report flows for abusive users.
-- Audit logs for all admin access.
-- Least-privilege backend services.
+### Run Backend
 
-Compliance posture:
+```powershell
+npm run dev:server
+```
 
-- Treat DPDP Act India, GDPR-style rights, and SOC2-style audit discipline as design constraints, even if the prototype is not certified.
-- Avoid strong legal claims. Say "evidence integrity support for FIR preparation", not "guaranteed admissible evidence".
+Default API:
 
-## Frontend Pages
+```text
+http://localhost:8000
+```
 
-Recommended v1 pages:
+Health check:
 
-- `/`: calm home/status surface with SOS action and quick links to all features
-- `/sos/active`: active SOS state, evidence capture, alert delivery status
-- `/witness/alert`: nearby alert detail for opted-in witnesses
-- `/evidence`: user evidence vault and deletion controls
-- `/safe-places`: nearby public places and verification status
-- `/trip`: start and monitor a time-bound safe trip with trusted contact escalation
-- `/contacts`: manage trusted contacts for Echo SMS alerts
-- `/admin`: command center overview
-- `/admin/incidents/[id]`: incident detail and audit trail
-- `/settings`: profile, witness opt-in, permissions, privacy controls
+```text
+http://localhost:8000/api/health
+```
 
-See `DESIGN_SYSTEM.md` for visual language, components, accessibility, and animation guidance.
+### Run Frontend
 
-## Engineering Practices
+```powershell
+npm run dev:web
+```
 
-- Keep the backend as a modular monolith: routers, services, repositories, schemas, and domain events.
-- Keep TypeScript strict and avoid untyped API responses.
-- Use Server Components by default in Next.js; use Client Components only for interaction, browser APIs, sensors, maps, and realtime state.
-- Keep business rules out of React components and FastAPI route handlers.
-- Prefer reusable domain components such as `SOSPanel`, `ResponderMap`, `EvidenceVault`, and `IncidentTimeline`.
-- Add libraries when they clearly improve speed, reliability, accessibility, maps, encryption, or UI quality.
-- Developers may manually test during the hackathon, but high-risk logic should be easy to cover with tests later.
+Default web app:
 
-## Roadmap
+```text
+http://localhost:3000
+```
 
-Milestone 1: Honest prototype base
+### Demo Accounts
 
-- Root workspace
-- Health-connected frontend
-- Product docs
-- Design system
+On first startup the backend seeds demo users if safe places are empty.
 
-Milestone 2: SOS loop
+| Email | Password | Role |
+| --- | --- | --- |
+| `demo@abhaya.in` | `demo1234` | user |
+| `admin@abhaya.in` | `admin1234` | admin |
+| `witness@abhaya.in` | `witness1234` | user, witness opt-in |
 
-- Email auth
-- Create SOS
-- Active incident page
-- Plain-language error handling
-- PostGIS incident storage
+## Configuration
 
-Milestone 3: Witness network
+Backend settings use the `ABHAYA_` prefix.
 
-- Witness opt-in
-- Nearby geospatial query
-- Anonymous witness alert
-- Acknowledgement events
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `ABHAYA_APP_NAME` | `Abhaya Core API` | FastAPI app name |
+| `ABHAYA_DEBUG` | `false` | SQL echo and debug behavior |
+| `ABHAYA_SECRET_KEY` | development secret | JWT signing key |
+| `ABHAYA_ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` | Token lifetime |
+| `ABHAYA_DATABASE_URL` | `sqlite+aiosqlite:///./abhaya.db` | Async SQLAlchemy database URL |
+| `ABHAYA_EVIDENCE_UPLOAD_DIR` | `./uploads` | Local evidence file directory |
+| `ABHAYA_MAX_EVIDENCE_SIZE_BYTES` | `52428800` | Upload size limit |
+| `ABHAYA_WITNESS_ALERT_RADIUS_METERS` | `500` | Future geospatial witness radius |
+| `ABHAYA_MAX_SOS_PER_HOUR` | `3` | Per-user SOS rate limit |
+| `ABHAYA_MAX_SOS_LOCATION_AGE_MINUTES` | `10` | Accepted SOS location age |
+| `ABHAYA_MAX_SOS_ACCURACY_METERS` | `5000` | Accepted GPS accuracy radius |
+| `ABHAYA_MAX_EVIDENCE_PER_INCIDENT` | `10` | Evidence item cap |
+| `ABHAYA_MAX_TRUSTED_CONTACTS_PER_USER` | `5` | Trusted contact cap |
+| `ABHAYA_CORS_ORIGINS` | `http://localhost:3000` | Comma-separated or list of allowed origins |
 
-Milestone 4: Evidence support
+Frontend environment:
 
-- Browser media capture
-- Local hashing
-- Client-side encryption
-- Encrypted upload
-- Evidence metadata and audit events
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8000` | API base URL used by the PWA |
 
-Milestone 5: Command center
+## Testing
 
-- Admin incident list
-- Incident timeline
-- Safe-place verification
-- Audit log surface
+Backend integration tests use a disposable SQLite database and temporary upload directory.
 
-Milestone 6: Safe trip and trusted contacts
+```powershell
+python -m pytest apps\server\tests -q
+```
 
-- Trusted contacts CRUD
-- Time-bound trip creation and check-in
-- Automatic escalation on missed check-in
-- SMS fallback composer for offline Echo alerts
-- Safe trip and contacts quick links on safety home
+Compile-check backend Python:
 
-## Known Hard Problems
+```powershell
+python -m compileall apps\server
+```
 
-- PWAs cannot guarantee background shake detection or background recording on every device.
-- Browser permissions may block camera, microphone, location, or push notifications.
-- Evidence integrity support is not the same as guaranteed legal admissibility.
-- Nearby witness alerts can become unsafe if privacy boundaries are weak.
-- Safe-place data can become stale quickly.
-- Abuse prevention is central, not optional.
+Build frontend:
+
+```powershell
+npm run build:web
+```
+
+Current backend test coverage focuses on:
+
+| Test area | Behavior covered |
+| --- | --- |
+| Error format | Pydantic validation returns standard Abhaya error shape |
+| Trusted contacts | Persistence, masking, duplicate checks, limits, deletion |
+| Authorization | Users cannot access another user's contacts or trips |
+| SOS | Stale location rejection, poor accuracy rejection, active incident reuse |
+| Safe Trip | Create, active lookup, duplicate prevention, extend, check-in, terminal errors |
+| Scheduler | Overdue trip moves to pending and escalates with an incident when location exists |
+| Evidence | Hash mismatch rejection, media type rejection, successful metadata persistence |
+
+## Deployment
+
+### Recommended Hackathon Deployment
+
+| Layer | Recommendation |
+| --- | --- |
+| Web | Vercel or Netlify static/Next deployment |
+| API | Render, Railway, Fly.io, or similar Python ASGI host |
+| Database | PostgreSQL for deployed demo; SQLite only for local |
+| Evidence storage | Local disk for prototype; S3-compatible encrypted object store for deployed evidence |
+| CORS | Set `ABHAYA_CORS_ORIGINS` to the deployed web origin |
+| Secrets | Set `ABHAYA_SECRET_KEY` to a strong random value |
+
+### Backend Deployment Command
+
+```powershell
+python -m uvicorn apps.server.main:app --host 0.0.0.0 --port 8000
+```
+
+### Frontend Build Command
+
+```powershell
+npm run build:web
+```
+
+### Deployment Checklist
+
+| Check | Why it matters |
+| --- | --- |
+| Set a real `ABHAYA_SECRET_KEY` | Prevents token forgery |
+| Use PostgreSQL, not SQLite | Handles concurrent demo traffic more reliably |
+| Set CORS to exact web origin | Avoids broad browser access |
+| Configure persistent uploads or object storage | Prevents evidence files from disappearing on restart |
+| Run backend tests before deploy | Catches route, DB, and validation regressions |
+| Run frontend build before deploy | Catches TypeScript and route-generation issues |
+| Review copy for overclaims | Keeps safety promises honest |
+
+## PWA Notes
+
+The web app includes:
+
+- `public/manifest.json` for installability
+- `public/sw.js` service worker
+- Cached shell routes for core flows
+- Install prompt component
+- Offline banner
+- SOS offline queue support
+
+Service worker policy:
+
+| Request type | Strategy |
+| --- | --- |
+| API calls | Network-only |
+| Static assets | Cache-first |
+| Navigation | Network-first with cached shell fallback |
+
+SOS API calls are never cached.
+
+## Security And Abuse Considerations
+
+| Risk | Mitigation direction |
+| --- | --- |
+| False SOS spam | Per-user rate limit and audit events |
+| Contact data leakage | Mask phone numbers in API responses |
+| Witness stalking | Anonymous witness alerts and no live witness location exposure |
+| Evidence tampering | Hash verification on upload |
+| Admin misuse | Admin routes require role checks and should be audited |
+| Weak auth secrets | Environment-configured secret key for deployments |
+| Push overclaiming | Notifications are treated as best-effort |
+
+## Future Scope
+
+| Area | Future work |
+| --- | --- |
+| Database | PostgreSQL migrations with Alembic and PostGIS geospatial queries |
+| Realtime | Redis-backed live incident state and rate limits |
+| Evidence | Client-side encryption, S3 storage, background retry queue, hash anchoring |
+| Notifications | Real Web Push delivery and delivery receipts |
+| Safe Trip | Dedicated scheduler worker, SMS provider integration, escalation policy settings |
+| Contacts | Optional relationship labels and contact verification |
+| Abuse prevention | Report/block flows, trust scores, new-account cooldowns |
+| Admin | More granular audit filters and incident timeline exports |
+| Accessibility | Formal WCAG AA audit and automated checks |
+| Observability | Structured logs, request IDs, metrics, and alerting |
+| Deployment | Production-ready Dockerfiles and infrastructure templates |
+
+## Repository Map
+
+```text
+.
++-- apps/
+|   +-- server/
+|   |   +-- main.py
+|   |   +-- requirements.txt
+|   |   +-- app/
+|   |   +-- tests/
+|   +-- web/
+|       +-- package.json
+|       +-- public/
+|       +-- src/
++-- scripts/
++-- AGENTS.md
++-- CLAUDE.md
++-- DESIGN_SYSTEM.md
++-- README.md
++-- package.json
+```
 
 ## Glossary
 
-- SOS: an active emergency incident created by a user.
-- Witness: an opted-in nearby user who receives an anonymous alert.
-- Safe place: a public location that may be useful during an incident, with a visible verification level.
-- Evidence item: encrypted media or metadata attached to an incident.
-- Integrity anchor: a hash record used to show evidence was not modified after capture.
-- Command center: admin view for active incidents, safe places, and audit trails.
-- Safe trip: a time-bound journey with a check-in deadline and automatic escalation to trusted contacts if missed.
-- Trusted contact: a person stored by the user who receives Echo SMS alerts during a safe trip or SOS escalation.
-- Echo alert: an SMS sent to trusted contacts when push notification delivery is unavailable or the server cannot be reached.
-- SMS fallback: a client-side mechanism that opens the device native SMS composer with a pre-built alert body, requiring no server round-trip.
+| Term | Meaning |
+| --- | --- |
+| SOS | An active emergency incident created by a user |
+| Witness | An opted-in user who may receive an approximate-area alert |
+| Safe place | A public location that may help during an incident |
+| Evidence item | Uploaded media metadata with hash verification |
+| Integrity support | Hash-based support for showing a file was not changed after capture |
+| Safe Trip | A time-bound journey with check-in and escalation |
+| Trusted contact | A user-managed contact who may receive Echo alerts |
+| Echo alert | Trusted-contact escalation alert |
+| Command center | Admin view for incidents, users, safe places, and audit activity |
 
-## Related Docs
+## Related Documentation
 
-- `AGENTS.md`: project rules and coding guidance
-- `DESIGN_SYSTEM.md`: visual design system and frontend patterns
+| File | Purpose |
+| --- | --- |
+| `AGENTS.md` | Coding agent rules, safety constraints, architecture direction |
+| `DESIGN_SYSTEM.md` | UI principles, colors, layout, components, and copy guidance |
+| `CLAUDE.md` | Additional contributor guidance |
