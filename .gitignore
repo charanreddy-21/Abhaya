@@ -19,3 +19,7 @@ yarn-error.log*
 .next-dev*.log
 abhaya*.db
 uploads/
+
+# macOS metadata
+.DS_Store
+**/.DS_Store
