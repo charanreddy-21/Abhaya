@@ -150,9 +150,9 @@ export default function SafeTripPanel({ onEscalated }: SafeTripProps) {
     return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
   }, [trip]);
 
-  // Poll for status changes when in pending_checkin (every 15s)
+  // Poll while a trip is live so backend timer transitions show up after refresh or ETA.
   useEffect(() => {
-    if (trip?.status !== "pending_checkin") return;
+    if (!trip || !["active", "extended", "pending_checkin"].includes(trip.status)) return;
     const interval = setInterval(async () => {
       if (!trip) return;
       try {
@@ -313,8 +313,7 @@ export default function SafeTripPanel({ onEscalated }: SafeTripProps) {
         <h2 style={styles.heading}>Safe Trip</h2>
         <p style={styles.body}>
           Set your destination and arrival time. If you don't check in,
-          we'll send you a reminder — and notify your trusted contacts if
-          you don't respond.
+          Abhaya can prompt you and notify trusted contacts when configured.
         </p>
 
         <div style={styles.field}>
@@ -384,8 +383,8 @@ export default function SafeTripPanel({ onEscalated }: SafeTripProps) {
           Alert sent
         </h2>
         <p style={styles.body}>
-          You didn't respond to the safety check-in. Your trusted contacts
-          have been notified.
+          You didn't respond to the safety check-in. Abhaya has started the
+          configured escalation steps.
         </p>
         {trip.incidentId && (
           <a href="/sos/active" style={styles.primaryButton} role="button">
@@ -416,7 +415,7 @@ export default function SafeTripPanel({ onEscalated }: SafeTripProps) {
         </h2>
         <p style={styles.body}>
           Your trip to <strong>{trip.destinationLabel}</strong> is overdue.
-          Tap "I'm safe" within the timer or your contacts will be notified.
+          Tap "I'm safe" within the timer or Abhaya will start escalation.
         </p>
 
         {error && <p style={styles.errorText} role="alert">{error}</p>}
@@ -468,8 +467,8 @@ export default function SafeTripPanel({ onEscalated }: SafeTripProps) {
       </div>
 
       <p style={styles.hintText}>
-        If you don't check in by then, we'll send you a quick ping. You'll have
-        2 minutes to respond before your contacts are notified.
+        If you don't check in by then, Abhaya starts a check-in window. You'll
+        have 2 minutes to respond before escalation starts.
       </p>
 
       {error && <p style={styles.errorText} role="alert">{error}</p>}

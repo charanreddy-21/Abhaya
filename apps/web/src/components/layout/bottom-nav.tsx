@@ -2,14 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Siren, Users, FileVideo, MapPin } from 'lucide-react';
+import { Clock3, LayoutDashboard, Siren, Users, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const BOTTOM_NAV_ITEMS = [
   { href: '/', icon: LayoutDashboard, label: 'Home' },
-  { href: '/witness/alert', icon: Users, label: 'Witness' },
+  { href: '/trip', icon: Clock3, label: 'Trip' },
   { href: '/sos/active', icon: Siren, label: 'SOS', accent: true },
-  { href: '/evidence', icon: FileVideo, label: 'Evidence' },
+  { href: '/contacts', icon: Users, label: 'Contacts' },
   { href: '/safe-places', icon: MapPin, label: 'Places' },
 ];
 

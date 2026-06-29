@@ -7,7 +7,7 @@ import { SWRegister } from '@/components/layout/sw-register';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Abhaya — Safety with reason',
+  title: 'Abhaya - Safety with reason',
   description: 'A calm, PWA-first public safety platform for India.',
   manifest: '/manifest.json',
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Abhaya' },

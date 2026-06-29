@@ -8,6 +8,7 @@ import { SideNav } from './side-nav';
 import { CursorGlow } from '@/components/ui/cursor-glow';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { useOnlineStatus } from '@/lib/hooks';
+import { InstallPrompt } from './install-prompt';
 
 // Routes where shell nav is hidden (auth pages, full-screen flows)
 const SHELL_HIDDEN_PATHS = ['/auth/login', '/auth/register'];
@@ -30,13 +31,15 @@ export function AppShell({ children }: { children: ReactNode }) {
           You are offline. Abhaya will continue working and retry when connected.
         </div>
       )}
+      <a href="#main-content" className="skip-link">Skip to main content</a>
       <div className="shell-root">
         <SideNav />
-        <main className="shell-main">
+        <main id="main-content" className="shell-main" tabIndex={-1}>
           <ErrorBoundary>{children}</ErrorBoundary>
         </main>
         <BottomNav />
       </div>
+      <InstallPrompt />
     </>
   );
 }

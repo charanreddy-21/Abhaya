@@ -12,6 +12,7 @@ import {
   Settings,
   ShieldAlert,
   Siren,
+  Clock3,
   Users,
 } from 'lucide-react';
 import { AbhayaGlyph } from '@/components/brand/abhaya-glyph';
@@ -22,6 +23,8 @@ import { cn } from '@/lib/utils';
 const NAV_ITEMS = [
   { href: '/',              icon: LayoutDashboard, label: 'Home' },
   { href: '/sos/active',    icon: Siren,           label: 'SOS',        accent: true },
+  { href: '/trip',          icon: Clock3,          label: 'Safe Trip',  authOnly: true },
+  { href: '/contacts',      icon: Users,           label: 'Contacts',   authOnly: true },
   { href: '/sos/history',   icon: History,         label: 'History',    authOnly: true },
   { href: '/witness/alert', icon: Users,            label: 'Witness' },
   { href: '/evidence',      icon: FileVideo,        label: 'Evidence' },
