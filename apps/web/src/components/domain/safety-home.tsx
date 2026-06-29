@@ -14,6 +14,7 @@ import {
   Siren,
   Users,
   WifiOff,
+  Clock3,
 } from 'lucide-react';
 import { AbhayaGlyph } from '@/components/brand/abhaya-glyph';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +38,8 @@ const QUICK_LINKS: QuickLink[] = [
   { href: '/witness/alert', icon: <Users size={18} />,    label: 'Witness alerts', desc: 'Nearby requests' },
   { href: '/evidence',      icon: <FileVideo size={18} />, label: 'Evidence',       desc: 'Captured media' },
   { href: '/safe-places',   icon: <MapPin size={18} />,   label: 'Safe places',    desc: 'Nearby locations' },
+  { href: '/trip',          icon: <Clock3 size={18} />,   label: 'Safe Trip',      desc: 'Time-bound monitoring' },
+  { href: '/contacts',      icon: <Users size={18} />,    label: 'Contacts',       desc: 'Manage Echo alerts' },
 ];
 
 export function SafetyHome() {
