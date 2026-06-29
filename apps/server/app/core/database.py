@@ -29,6 +29,8 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 async def init_db() -> None:
     from apps.server.app.shared import models  # noqa: F401 — registers all ORM models
+    from apps.server.app.modules.safe_trip import repository 
+    from apps.server.app.modules.trusted_contacts import repository 
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
