@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -24,6 +25,12 @@ import {
   isPendingSOSStale,
 } from '@/lib/offline-queue';
 import type { Incident, WitnessAlert } from '@/lib/types';
+import type { MapCircle, MapMarker } from '@/components/ui/leaflet-map';
+
+const LeafletMap = dynamic(
+  () => import('@/components/ui/leaflet-map').then((m) => m.LeafletMap),
+  { ssr: false, loading: () => <div className="map-loading-placeholder" style={{ height: '100%' }}>Loading map...</div> },
+);
 
 export function ActiveSOSView() {
   const router = useRouter();
@@ -243,7 +250,12 @@ export function ActiveSOSView() {
             animate={{ opacity: 1 }}
           >
             <div className="sos-left-col">
-              <SOSMapZone incident={incident} witnesses={witnesses} geoReady={!!geo.position} />
+              <SOSRealMapZone
+                incident={incident}
+                geo={geo.position}
+                geoLoading={geo.isLoading}
+                onRequestLocation={geo.request}
+              />
               <SOSPrimaryAction
                 phase={phase}
                 creating={creating}
@@ -309,6 +321,90 @@ function SOSHeader({ phase, elapsed, incident }: {
       </div>
     </div>
   );
+}
+
+function SOSRealMapZone({ incident, geo, geoLoading, onRequestLocation }: {
+  incident: Incident | null;
+  geo: GeolocationCoordinates | null;
+  geoLoading: boolean;
+  onRequestLocation: () => void;
+}) {
+  const mapPoint = incident
+    ? {
+        lat: incident.approx_lat,
+        lng: incident.approx_lng,
+        accuracy: incident.accuracy_meters,
+        label: 'SOS location',
+        popup: `Approximate incident location. Accuracy about ${formatAccuracy(incident.accuracy_meters)}.`,
+      }
+    : geo
+      ? {
+          lat: geo.latitude,
+          lng: geo.longitude,
+          accuracy: geo.accuracy,
+          label: 'Your location',
+          popup: `Current device location. Accuracy about ${formatAccuracy(geo.accuracy)}.`,
+        }
+      : null;
+
+  if (!mapPoint) {
+    return (
+      <div className="sos-map-zone sos-map-empty">
+        <img src="/illustrations/location-shield.svg" alt="" className="sos-map-empty-art" />
+        <div className="sos-map-empty-copy">
+          <p className="sos-map-empty-title">Location needed for nearby alerts</p>
+          <p>Abhaya uses your location only to start the SOS and notify opted-in users nearby.</p>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={geoLoading ? <Loader2 size={14} className="spin" /> : <MapPin size={14} />}
+            onClick={onRequestLocation}
+            disabled={geoLoading}
+          >
+            {geoLoading ? 'Getting location' : 'Use my location'}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const markers: MapMarker[] = [{
+    lat: mapPoint.lat,
+    lng: mapPoint.lng,
+    label: mapPoint.label,
+    color: incident ? 'red' : 'teal',
+    popup: mapPoint.popup,
+  }];
+
+  const circles: MapCircle[] = [{
+    lat: mapPoint.lat,
+    lng: mapPoint.lng,
+    radiusMeters: Math.max(mapPoint.accuracy, 80),
+    color: incident ? 'red' : 'teal',
+    fillOpacity: incident ? 0.14 : 0.10,
+    label: `Approximate accuracy: ${formatAccuracy(mapPoint.accuracy)}`,
+  }];
+
+  return (
+    <div className="sos-map-zone">
+      <LeafletMap
+        center={[mapPoint.lat, mapPoint.lng]}
+        zoom={incident ? 16 : 15}
+        height="100%"
+        markers={markers}
+        circles={circles}
+        ariaLabel={incident ? 'Map showing the approximate SOS location' : 'Map showing your current location'}
+      />
+      <div className="map-overlay-notice">
+        <MapPin size={13} />
+        {incident ? 'Approximate SOS area' : `Location accuracy ${formatAccuracy(mapPoint.accuracy)}`}
+      </div>
+    </div>
+  );
+}
+
+function formatAccuracy(meters: number): string {
+  return meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`;
 }
 
 function SOSMapZone({ incident, witnesses, geoReady }: {

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="280" viewBox="0 0 420 280" role="img" aria-labelledby="title desc">
+  <title id="title">Location privacy illustration</title>
+  <desc id="desc">A calm map with a protected location marker.</desc>
+  <rect width="420" height="280" rx="24" fill="#F4F7F5"/>
+  <path d="M54 70c44 7 62 4 98-18 42-25 83-21 116 8 30 27 58 35 98 28" fill="none" stroke="#D8E0DC" stroke-width="18" stroke-linecap="round"/>
+  <path d="M46 202c42-30 84-37 128-20 40 16 76 10 112-18 31-24 59-28 96-13" fill="none" stroke="#D8E0DC" stroke-width="18" stroke-linecap="round"/>
+  <path d="M68 118h284M82 154h256" stroke="#D8E0DC" stroke-width="2" stroke-dasharray="8 10"/>
+  <circle cx="210" cy="140" r="86" fill="#FFF1F2" stroke="#E11D48" stroke-width="2" opacity=".68"/>
+  <circle cx="210" cy="140" r="50" fill="#FFFFFF" stroke="#D8E0DC" stroke-width="2"/>
+  <path d="M210 88l50 18v36c0 38-22 62-50 75-28-13-50-37-50-75v-36l50-18z" fill="#1F6F50"/>
+  <path d="M189 142l14 14 31-38" fill="none" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="108" cy="88" r="10" fill="#0F766E"/>
+  <circle cx="328" cy="198" r="10" fill="#F59E0B"/>
+  <circle cx="322" cy="74" r="7" fill="#1F6F50"/>
+</svg>

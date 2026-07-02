@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useId } from 'react';
+import type { MutableRefObject } from 'react';
 
 export interface MapMarker {
   lat: number;
@@ -14,10 +15,21 @@ export interface LeafletMapProps {
   center: [number, number];
   zoom?: number;
   markers?: MapMarker[];
+  circles?: MapCircle[];
   className?: string;
   height?: number | string;
   interactive?: boolean;
   attribution?: boolean;
+  ariaLabel?: string;
+}
+
+export interface MapCircle {
+  lat: number;
+  lng: number;
+  radiusMeters: number;
+  color?: 'forest' | 'red' | 'amber' | 'teal' | 'slate';
+  fillOpacity?: number;
+  label?: string;
 }
 
 const COLORS: Record<string, string> = {
@@ -43,13 +55,16 @@ export function LeafletMap({
   center,
   zoom = 15,
   markers = [],
+  circles = [],
   className = '',
   height = 300,
   interactive = true,
   attribution = true,
+  ariaLabel = 'Interactive map',
 }: LeafletMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef       = useRef<unknown>(null);
+  const dynamicLayersRef = useRef<unknown[]>([]);
   const uid          = useId();
 
   useEffect(() => {
@@ -89,22 +104,8 @@ export function LeafletMap({
         maxZoom: 19,
       }).addTo(map);
 
-      for (const m of markers) {
-        const iconUrl  = makeIcon(m.color ?? 'forest');
-        const leafIcon = L.icon({
-          iconUrl,
-          iconSize:   [24, 32],
-          iconAnchor: [12, 32],
-          popupAnchor:[0, -32],
-        });
-        const marker = L.marker([m.lat, m.lng], { icon: leafIcon, title: m.label });
-        if (m.popup) {
-          marker.bindPopup(`<strong>${m.label}</strong><br>${m.popup}`);
-        }
-        marker.addTo(map);
-      }
-
       mapRef.current = map;
+      renderDynamicLayers(L, map, markers, circles, dynamicLayersRef);
     }
 
     init().catch(console.error);
@@ -118,28 +119,22 @@ export function LeafletMap({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // only mount once
 
-  // When markers change, rebuild them
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current as import('leaflet').Map;
+    map.setView(center, zoom, { animate: true });
+  }, [center, zoom]);
+
+  // When markers or circles change, rebuild only those overlays.
   useEffect(() => {
     async function update() {
       if (!mapRef.current) return;
       const L = (await import('leaflet')).default;
       const map = mapRef.current as import('leaflet').Map;
-
-      // Remove old layers (markers only)
-      map.eachLayer((layer) => {
-        if (layer instanceof L.Marker) map.removeLayer(layer);
-      });
-
-      for (const m of markers) {
-        const iconUrl  = makeIcon(m.color ?? 'forest');
-        const leafIcon = L.icon({ iconUrl, iconSize: [24, 32], iconAnchor: [12, 32], popupAnchor: [0, -32] });
-        const marker   = L.marker([m.lat, m.lng], { icon: leafIcon, title: m.label });
-        if (m.popup) marker.bindPopup(`<strong>${m.label}</strong><br>${m.popup}`);
-        marker.addTo(map);
-      }
+      renderDynamicLayers(L, map, markers, circles, dynamicLayersRef);
     }
     update().catch(console.error);
-  }, [markers]);
+  }, [markers, circles]);
 
   return (
     <>
@@ -155,9 +150,57 @@ export function LeafletMap({
         id={`leaflet-map-${uid}`}
         className={`leaflet-map-container ${className}`}
         style={{ height }}
-        aria-label="Interactive map"
+        aria-label={ariaLabel}
         role="region"
       />
     </>
   );
+}
+
+function renderDynamicLayers(
+  L: typeof import('leaflet'),
+  map: import('leaflet').Map,
+  markers: MapMarker[],
+  circles: MapCircle[],
+  layerRef: MutableRefObject<unknown[]>,
+) {
+  for (const layer of layerRef.current) {
+    map.removeLayer(layer as import('leaflet').Layer);
+  }
+  layerRef.current = [];
+
+  for (const c of circles) {
+    const color = COLORS[c.color ?? 'red'] ?? COLORS.red;
+    const circle = L.circle([c.lat, c.lng], {
+      radius: c.radiusMeters,
+      color,
+      fillColor: color,
+      fillOpacity: c.fillOpacity ?? 0.12,
+      weight: 2,
+    });
+    if (c.label) circle.bindTooltip(c.label);
+    circle.addTo(map);
+    layerRef.current.push(circle);
+  }
+
+  for (const m of markers) {
+    const iconUrl  = makeIcon(m.color ?? 'forest');
+    const leafIcon = L.icon({
+      iconUrl,
+      iconSize:   [24, 32],
+      iconAnchor: [12, 32],
+      popupAnchor:[0, -32],
+    });
+    const marker = L.marker([m.lat, m.lng], { icon: leafIcon, title: m.label });
+    if (m.popup) {
+      const popup = document.createElement('div');
+      const title = document.createElement('strong');
+      title.textContent = m.label;
+      popup.append(title);
+      popup.append(document.createElement('br'), document.createTextNode(m.popup));
+      marker.bindPopup(popup);
+    }
+    marker.addTo(map);
+    layerRef.current.push(marker);
+  }
 }
