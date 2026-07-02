@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
@@ -92,15 +93,26 @@ function DashboardView({ user }: { user: { display_name: string } | null }) {
 
       {/* SOS hero */}
       <div className="dashboard-sos-hero">
-        <h2>Emergency SOS</h2>
-        <p>
-          Start an SOS to alert nearby opted-in users. No police dispatch.
-          Call 112 for life-threatening emergencies.
-        </p>
-        <Link href="/sos/active" className="dashboard-sos-btn" aria-label="Start SOS">
-          <Siren size={22} />
-          {activeIncident ? 'Manage active SOS' : 'Start SOS'}
-        </Link>
+        <div className="dashboard-sos-hero-copy">
+          <h2>Emergency SOS</h2>
+          <p>
+            Start an SOS to alert nearby opted-in users. No police dispatch.
+            Call 112 for life-threatening emergencies.
+          </p>
+          <Link href="/sos/active" className="dashboard-sos-btn" aria-label="Start SOS">
+            <Siren size={22} />
+            {activeIncident ? 'Manage active SOS' : 'Start SOS'}
+          </Link>
+        </div>
+        <div className="dashboard-sos-visual" aria-hidden>
+          <Image
+            src="/images/sos-map-companion.png"
+            alt=""
+            fill
+            sizes="(max-width: 720px) 100vw, 420px"
+            priority
+          />
+        </div>
       </div>
 
       {/* System status */}
@@ -179,6 +191,8 @@ function LandingView() {
           A public safety companion for India. Safety with reason — calm, honest, and clear about what it can and cannot do.
         </p>
       </div>
+
+      <img src="/illustrations/safe-route.svg" alt="" className="landing-map-art" />
 
       <div className="landing-features">
         {features.map((f) => (
