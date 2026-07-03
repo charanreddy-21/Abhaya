@@ -343,7 +343,7 @@ http://localhost:3000
 
 ### Demo Accounts
 
-On first startup the backend seeds demo users if safe places are empty.
+On startup the backend idempotently seeds demo users, safe places, trusted contacts, sample SOS incidents, witness alerts, evidence placeholders, and an active Safe Trip so the app is immediately demoable.
 
 | Email | Password | Role |
 | --- | --- | --- |

@@ -51,7 +51,7 @@ async def lifespan(application: FastAPI):
 
     scheduler_task = asyncio.create_task(_safe_trip_scheduler(application))
 
-    await _seed_if_empty()
+    await _seed_demo_data()
     try:
         yield
     finally:
@@ -126,75 +126,9 @@ async def health_check():
 
 # ── Seed ────────────────────────────────────────────────────────────────────
 
-async def _seed_if_empty() -> None:
-    """Populate demo data on first run so the UI has something to show."""
-    from apps.server.app.core.security import hash_password
-    from apps.server.app.modules.safe_places.repository import SafePlaceRepository
-    from apps.server.app.modules.auth.repository import UserRepository
-    from apps.server.app.shared.models import SafePlace
+async def _seed_demo_data() -> None:
+    """Populate a complete, idempotent demo baseline."""
+    from apps.server.app.demo_seed import seed_demo_data
 
     async with SessionLocal() as db:
-        place_repo = SafePlaceRepository(db)
-        if await place_repo.count() > 0:
-            return
-
-        user_repo = UserRepository(db)
-
-        demo_user = await user_repo.get_by_email("demo@abhaya.in")
-        if not demo_user:
-            demo_user = await user_repo.create(
-                email="demo@abhaya.in",
-                hashed_password=hash_password("demo1234"),
-                display_name="Demo User",
-                role="user",
-            )
-            demo_user = await user_repo.update(demo_user, witness_opt_in=True)
-
-        demo_admin = await user_repo.get_by_email("admin@abhaya.in")
-        if not demo_admin:
-            demo_admin = await user_repo.create(
-                email="admin@abhaya.in",
-                hashed_password=hash_password("admin1234"),
-                display_name="Admin User",
-                role="admin",
-            )
-
-        witness_user = await user_repo.get_by_email("witness@abhaya.in")
-        if not witness_user:
-            witness_user = await user_repo.create(
-                email="witness@abhaya.in",
-                hashed_password=hash_password("witness1234"),
-                display_name="Priya Sharma",
-                role="user",
-            )
-            witness_user = await user_repo.update(witness_user, witness_opt_in=True)
-
-        seed_places = [
-            dict(name="Koramangala Police Station", kind="police", lat=12.9352, lng=77.6245,
-                 address="80 Feet Road, Koramangala 4th Block, Bengaluru 560034",
-                 is_open=True, verification_level="admin"),
-            dict(name="Manipal Hospital HSR", kind="hospital", lat=12.9116, lng=77.6389,
-                 address="7 Outer Ring Road, HSR Layout, Bengaluru 560102",
-                 is_open=True, verification_level="admin"),
-            dict(name="Apollo Pharmacy Koramangala", kind="pharmacy", lat=12.9342, lng=77.6255,
-                 address="2nd Main Rd, Koramangala 5th Block, Bengaluru 560095",
-                 is_open=True, verification_level="community"),
-            dict(name="BPCL Petrol Station", kind="petrol", lat=12.9281, lng=77.6320,
-                 address="Sarjapur Road, Koramangala, Bengaluru 560095",
-                 is_open=True, verification_level="community"),
-            dict(name="Forum Mall Security Post", kind="shelter", lat=12.9323, lng=77.6235,
-                 address="Hosur Rd, Koramangala, Bengaluru 560095",
-                 is_open=False, verification_level="community"),
-            dict(name="Indiranagar Police Station", kind="police", lat=12.9784, lng=77.6408,
-                 address="100 Feet Road, Indiranagar, Bengaluru 560038",
-                 is_open=True, verification_level="admin"),
-            dict(name="Jayadeva Hospital", kind="hospital", lat=12.9201, lng=77.5968,
-                 address="Bannerghatta Road, Jayanagar, Bengaluru 560041",
-                 is_open=True, verification_level="admin"),
-        ]
-
-        for p in seed_places:
-            vl = p.pop("verification_level")
-            place = SafePlace(**p, added_by=demo_admin.id, verification_level=vl)
-            db.add(place)
-        await db.commit()
+        await seed_demo_data(db)

@@ -63,6 +63,13 @@ class SOSService:
 
         incident = await self._repo.create(user_id, req.lat, req.lng, req.accuracy_meters)
 
+        from apps.server.app.modules.evidence.demo_seed import attach_dummy_evidence_if_missing
+        await attach_dummy_evidence_if_missing(self._db, incident)
+        await self._db.commit()
+        reloaded = await self._repo.get_by_id(incident.id)
+        if reloaded:
+            incident = reloaded
+
         # Fire-and-forget witness alerts asynchronously
         try:
             alert_svc = WitnessAlertService(self._db)
