@@ -8,3 +8,5 @@ joserfc==1.6.5
 bcrypt==5.0.0
 aiofiles==25.1.0
 python-multipart==0.0.12
+email-validator==2.2.0
+greenlet==3.1.1
